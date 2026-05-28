@@ -139,7 +139,7 @@ class ConnectedAirPodsMonitor(private val context: Context) {
     }
 
     private fun readMetaInt(device: BluetoothDevice, key: Int): Int? = try {
-        val method = device.javaClass.getMethod("getMetadata", Int::class.javaPrimitiveType)
+        val method = device.javaClass.getMethod("getMetadata", Integer.TYPE)
         val raw = method.invoke(device, key) as? ByteArray
         raw?.let { String(it, Charsets.UTF_8).trim().toIntOrNull() }
     } catch (t: Throwable) {
@@ -148,7 +148,7 @@ class ConnectedAirPodsMonitor(private val context: Context) {
     }
 
     private fun readMetaBool(device: BluetoothDevice, key: Int): Boolean? = try {
-        val method = device.javaClass.getMethod("getMetadata", Int::class.javaPrimitiveType)
+        val method = device.javaClass.getMethod("getMetadata", Integer.TYPE)
         val raw = method.invoke(device, key) as? ByteArray
         raw?.let {
             val s = String(it, Charsets.UTF_8).trim().lowercase()

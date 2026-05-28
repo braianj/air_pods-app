@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -13,13 +14,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import android.widget.Toast
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.airpods.app.ui.dashboard.DashboardScreen
 import com.airpods.app.ui.theme.AirPodsTheme
 import com.airpods.app.ui.theme.ThemePrefs
+import com.airpods.app.update.Updater
 import com.airpods.app.util.AppLogger
 import com.airpods.app.util.LogShare
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -58,27 +61,45 @@ class MainActivity : ComponentActivity() {
                         AppLogger.i("MainActivity", "theme cycled to $next")
                         ThemePrefs.set(this, next)
                     },
-                    onShareLogs = {
-                        AppLogger.i("MainActivity", "user tapped Export logs")
-                        runCatching {
-                            LogShare.shareLogs(this, getString(R.string.action_share_logs))
-                        }.onSuccess {
-                            Toast.makeText(
-                                this,
-                                getString(R.string.toast_export_ok),
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }.onFailure { err ->
-                            AppLogger.e("MainActivity", "share failed", err)
-                            Toast.makeText(
-                                this,
-                                getString(R.string.toast_export_failed, err.javaClass.simpleName),
-                                Toast.LENGTH_LONG
-                            ).show()
-                        }
-                    }
+                    onShareLogs = ::exportLogs,
+                    onCheckUpdate = ::checkUpdate
                 )
             }
+        }
+    }
+
+    private fun exportLogs() {
+        AppLogger.i("MainActivity", "user tapped Export logs")
+        runCatching {
+            LogShare.saveToDownloads(this)
+        }.onSuccess { fileName ->
+            if (fileName != null) {
+                Toast.makeText(
+                    this,
+                    getString(R.string.toast_export_ok, fileName),
+                    Toast.LENGTH_LONG
+                ).show()
+            } else {
+                Toast.makeText(
+                    this,
+                    getString(R.string.toast_export_failed, "MediaStore"),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }.onFailure { err ->
+            AppLogger.e("MainActivity", "exportLogs failed", err)
+            Toast.makeText(
+                this,
+                getString(R.string.toast_export_failed, err.javaClass.simpleName),
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    private fun checkUpdate() {
+        AppLogger.i("MainActivity", "user tapped Check update")
+        lifecycleScope.launch {
+            Updater.downloadAndInstall(this@MainActivity)
         }
     }
 

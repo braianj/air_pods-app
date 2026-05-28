@@ -20,6 +20,12 @@
     <!-- Keep service running across reboots -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Network access for self-update -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Required to launch the system installer with a downloaded APK -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <uses-feature
         android:name="android.hardware.bluetooth_le"
         android:required="true" />

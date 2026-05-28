@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -29,6 +30,7 @@ import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -52,6 +54,7 @@ import com.airpods.app.ui.theme.BatteryBad
 import com.airpods.app.ui.theme.BatteryGood
 import com.airpods.app.ui.theme.BatteryWarn
 import com.airpods.app.ui.theme.ThemePreference
+import com.airpods.app.update.Updater
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,10 +64,12 @@ fun DashboardScreen(
     themePreference: ThemePreference = ThemePreference.SYSTEM,
     onCycleTheme: () -> Unit = {},
     onShareLogs: () -> Unit = {},
+    onCheckUpdate: () -> Unit = {},
     viewModel: DashboardViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val running = viewModel.isRunningRequested()
+    val updateState by Updater.state.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -104,9 +109,91 @@ fun DashboardScreen(
                 if (hasPermissions) viewModel.start() else onRequestPermissions()
             },
             onStop = viewModel::stop,
-            onShareLogs = onShareLogs
+            onShareLogs = onShareLogs,
+            onCheckUpdate = onCheckUpdate
         )
+
+        UpdateOverlay(state = updateState, onDismiss = { Updater.reset() })
     }
+}
+
+@Composable
+private fun UpdateOverlay(
+    state: Updater.UpdateState,
+    onDismiss: () -> Unit
+) {
+    when (state) {
+        Updater.UpdateState.Idle -> Unit
+        is Updater.UpdateState.Downloading -> {
+            AlertDialog(
+                onDismissRequest = { /* no-op while downloading */ },
+                confirmButton = {},
+                title = { Text(stringResource(R.string.update_dialog_title)) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (state.total > 0) {
+                            Text(
+                                text = stringResource(
+                                    R.string.update_progress_fmt,
+                                    state.progress * 100,
+                                    formatBytes(state.bytes),
+                                    formatBytes(state.total)
+                                ),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            LinearProgressIndicator(
+                                progress = { state.progress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(10.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                            )
+                        } else {
+                            Text(stringResource(R.string.update_progress_unknown))
+                            LinearProgressIndicator(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(10.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                            )
+                        }
+                    }
+                }
+            )
+        }
+        Updater.UpdateState.NeedsInstallPermission -> {
+            AlertDialog(
+                onDismissRequest = onDismiss,
+                confirmButton = {
+                    TextButton(onClick = onDismiss) { Text("OK") }
+                },
+                title = { Text(stringResource(R.string.update_dialog_title)) },
+                text = { Text(stringResource(R.string.update_needs_install_perm)) }
+            )
+        }
+        is Updater.UpdateState.Error -> {
+            AlertDialog(
+                onDismissRequest = onDismiss,
+                confirmButton = {
+                    TextButton(onClick = onDismiss) { Text("OK") }
+                },
+                title = { Text(stringResource(R.string.update_dialog_title)) },
+                text = { Text(stringResource(R.string.update_error, state.message)) }
+            )
+        }
+        is Updater.UpdateState.Done -> {
+            // The installer Activity is up; just dismiss the dialog.
+            onDismiss()
+        }
+    }
+}
+
+private fun formatBytes(b: Long): String {
+    if (b < 1024) return "$b B"
+    val kb = b / 1024.0
+    if (kb < 1024) return "%.0f KB".format(kb)
+    val mb = kb / 1024.0
+    return "%.1f MB".format(mb)
 }
 
 @Composable
@@ -117,7 +204,8 @@ private fun DashboardContent(
     hasPermissions: Boolean,
     onStart: () -> Unit,
     onStop: () -> Unit,
-    onShareLogs: () -> Unit
+    onShareLogs: () -> Unit,
+    onCheckUpdate: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -156,6 +244,7 @@ private fun DashboardContent(
         )
 
         ExportLogsButton(onClick = onShareLogs)
+        UpdateButton(onClick = onCheckUpdate)
 
         if (state.snapshot == null) {
             HintCard()
@@ -454,6 +543,23 @@ private fun ExportLogsButton(onClick: () -> Unit) {
         )
         Spacer(Modifier.width(8.dp))
         Text(stringResource(R.string.action_export_logs))
+    }
+}
+
+@Composable
+private fun UpdateButton(onClick: () -> Unit) {
+    FilledTonalButton(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_update),
+            contentDescription = null,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.action_check_update))
     }
 }
 

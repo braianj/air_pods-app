@@ -13,5 +13,5 @@
     <color name="battery_good">#34C759</color>
     <color name="battery_warn">#FFB020</color>
     <color name="battery_bad">#FF453A</color>
-    <color name="ic_launcher_background">#0F1014</color>
+    <color name="ic_launcher_background">#3B4378</color>
 </resources>

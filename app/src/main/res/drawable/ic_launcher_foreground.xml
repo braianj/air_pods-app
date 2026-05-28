@@ -4,35 +4,19 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Left AirPod head (round earbud) -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M22,33 a14,14 0 1,1 28,0 a14,14 0 1,1 -28,0 Z" />
+        android:pathData="M49,32 C49,39.2 43.2,45 36,45 C28.8,45 23,39.2 23,32 C23,24.8 28.8,19 36,19 C43.2,19 49,24.8 49,32 Z" />
 
-    <!-- Left AirPod stem (tapered, rounded tip) -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M30,40 L42,40 L41,78 C41,83 39,86 36,86 C33,86 31,83 31,78 Z" />
+        android:pathData="M30,40 L42,40 L41,78 C41,82.5 39,85 36,85 C33,85 31,82.5 31,78 Z" />
 
-    <!-- Subtle highlight on left earbud -->
-    <path
-        android:fillColor="#E8E9F5"
-        android:pathData="M28,28 a4,4 0 1,1 8,0 a4,4 0 1,1 -8,0 Z"
-        android:fillAlpha="0.5" />
-
-    <!-- Right AirPod head -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M58,33 a14,14 0 1,1 28,0 a14,14 0 1,1 -28,0 Z" />
+        android:pathData="M85,32 C85,39.2 79.2,45 72,45 C64.8,45 59,39.2 59,32 C59,24.8 64.8,19 72,19 C79.2,19 85,24.8 85,32 Z" />
 
-    <!-- Right AirPod stem -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M66,40 L78,40 L77,78 C77,83 75,86 72,86 C69,86 67,83 67,78 Z" />
-
-    <!-- Subtle highlight on right earbud -->
-    <path
-        android:fillColor="#E8E9F5"
-        android:pathData="M64,28 a4,4 0 1,1 8,0 a4,4 0 1,1 -8,0 Z"
-        android:fillAlpha="0.5" />
+        android:pathData="M66,40 L78,40 L77,78 C77,82.5 75,85 72,85 C69,85 67,82.5 67,78 Z" />
 </vector>

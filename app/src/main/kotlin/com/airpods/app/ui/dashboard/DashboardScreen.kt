@@ -111,7 +111,8 @@ fun DashboardScreen(
             },
             onStop = viewModel::stop,
             onShareLogs = onShareLogs,
-            onCheckUpdate = onCheckUpdate
+            onCheckUpdate = onCheckUpdate,
+            onClearCache = viewModel::clearCachedSnapshot
         )
 
         UpdateOverlay(state = updateState, onDismiss = { Updater.reset() })
@@ -206,7 +207,8 @@ private fun DashboardContent(
     onStart: () -> Unit,
     onStop: () -> Unit,
     onShareLogs: () -> Unit,
-    onCheckUpdate: () -> Unit
+    onCheckUpdate: () -> Unit,
+    onClearCache: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -255,7 +257,7 @@ private fun DashboardContent(
             StaleDataCard(
                 timestampMs = snap.timestampMs,
                 deviceName = audioName,
-                onClear = { viewModel.clearCachedSnapshot() }
+                onClear = onClearCache
             )
         }
     }

@@ -103,7 +103,8 @@ fun DashboardScreen(
             onStart = {
                 if (hasPermissions) viewModel.start() else onRequestPermissions()
             },
-            onStop = viewModel::stop
+            onStop = viewModel::stop,
+            onShareLogs = onShareLogs
         )
     }
 }
@@ -115,7 +116,8 @@ private fun DashboardContent(
     running: Boolean,
     hasPermissions: Boolean,
     onStart: () -> Unit,
-    onStop: () -> Unit
+    onStop: () -> Unit,
+    onShareLogs: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -152,6 +154,8 @@ private fun DashboardContent(
             onStart = onStart,
             onStop = onStop
         )
+
+        ExportLogsButton(onClick = onShareLogs)
 
         if (state.snapshot == null) {
             HintCard()
@@ -433,6 +437,23 @@ private fun ControlButtons(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ExportLogsButton(onClick: () -> Unit) {
+    FilledTonalButton(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_share),
+            contentDescription = null,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.action_export_logs))
     }
 }
 

@@ -39,4 +39,5 @@
     <string name="theme_label_dark">Oscuro</string>
 
     <string name="action_share_logs">Compartir logs</string>
+    <string name="action_export_logs">Exportar logs</string>
 </resources>

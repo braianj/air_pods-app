@@ -39,4 +39,5 @@
     <string name="theme_label_dark">Dark</string>
 
     <string name="action_share_logs">Share logs</string>
+    <string name="action_export_logs">Export logs</string>
 </resources>

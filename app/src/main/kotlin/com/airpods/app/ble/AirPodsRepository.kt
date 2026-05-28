@@ -48,7 +48,22 @@ object AirPodsRepository {
                 proximity = reading
             )
         }
-        persistLastSnapshot(snapshot)
+        // Only persist FULL captures (all three values present). Partial
+        // captures — like the one we get during pairing when one pod is in
+        // the ear — would otherwise stick around forever as misleading
+        // "40% / — / 40%" stale data with no way to know it's stale.
+        if (snapshot.leftPct != null && snapshot.rightPct != null && snapshot.casePct != null) {
+            persistLastSnapshot(snapshot)
+        }
+    }
+
+    fun clearPersisted() {
+        val ctx = appContext ?: return
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+        proximity.reset()
+        val audio = _state.value.audioConnectedName
+        _state.value = AirPodsState(audioConnectedName = audio)
+        AppLogger.i("Repo", "persisted snapshot cleared by user")
     }
 
     fun onLost() {
@@ -84,6 +99,13 @@ object AirPodsRepository {
         val sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val ts = sp.getLong(KEY_LAST_TS, 0L)
         if (ts == 0L) return
+        val ageMs = System.currentTimeMillis() - ts
+        // Anything older than 24h is so stale it's actively misleading. Wipe it.
+        if (ageMs > 24 * 60 * 60 * 1000L) {
+            sp.edit().clear().apply()
+            AppLogger.i("Repo", "wiped stale snapshot from ${ageMs / 1000}s ago")
+            return
+        }
         val left = sp.getInt(KEY_LAST_LEFT, -1).takeIf { it >= 0 }
         val right = sp.getInt(KEY_LAST_RIGHT, -1).takeIf { it >= 0 }
         val case = sp.getInt(KEY_LAST_CASE, -1).takeIf { it >= 0 }

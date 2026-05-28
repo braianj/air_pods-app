@@ -23,6 +23,10 @@ class DashboardViewModel(app: Application) : AndroidViewModel(app) {
     fun isRunningRequested(): Boolean =
         prefs().getBoolean(BootReceiver.KEY_AUTOSTART, false)
 
+    fun clearCachedSnapshot() {
+        AirPodsRepository.clearPersisted()
+    }
+
     private fun prefs() =
         getApplication<Application>().getSharedPreferences(BootReceiver.PREFS, 0)
 }

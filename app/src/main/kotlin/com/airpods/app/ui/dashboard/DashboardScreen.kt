@@ -35,6 +35,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -247,10 +248,15 @@ private fun DashboardContent(
         UpdateButton(onClick = onCheckUpdate)
 
         val audioName = state.audioConnectedName
-        if (state.snapshot == null) {
+        val snap = state.snapshot
+        if (snap == null) {
             HintCard()
-        } else if (audioName != null) {
-            AudioConnectedHintCard(audioName)
+        } else {
+            StaleDataCard(
+                timestampMs = snap.timestampMs,
+                deviceName = audioName,
+                onClear = { viewModel.clearCachedSnapshot() }
+            )
         }
     }
 }
@@ -628,6 +634,50 @@ private fun HintCard() {
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+@Composable
+private fun StaleDataCard(timestampMs: Long, deviceName: String?, onClear: () -> Unit) {
+    val ageText = remember(timestampMs) { formatAge(timestampMs) }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = stringResource(R.string.data_age_label, ageText),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = if (deviceName != null)
+                    stringResource(R.string.hint_audio_connected, deviceName)
+                else
+                    stringResource(R.string.hint_stale_no_audio),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+            Spacer(Modifier.height(12.dp))
+            TextButton(
+                onClick = onClear,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.action_clear_cache))
+            }
+        }
+    }
+}
+
+private fun formatAge(timestampMs: Long): String {
+    val seconds = ((System.currentTimeMillis() - timestampMs) / 1000L).coerceAtLeast(0L)
+    return when {
+        seconds < 60 -> "${seconds}s"
+        seconds < 3600 -> "${seconds / 60}m"
+        seconds < 86400 -> "${seconds / 3600}h"
+        else -> "${seconds / 86400}d"
     }
 }
 

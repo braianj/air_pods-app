@@ -34,6 +34,9 @@
 
     <string name="hint_open_lid">Open the AirPods case near the phone to see battery levels. Apple only broadcasts levels for ~30 seconds when the lid opens.</string>
     <string name="hint_audio_connected">%1$s is connected for audio. Showing the last captured battery levels. Re-open the case lid near the phone to refresh — Android doesn\'t allow reading the live battery while the device is just connected for audio.</string>
+    <string name="hint_stale_no_audio">Last captured AirPods reading. To refresh, open the case lid near the phone.</string>
+    <string name="data_age_label">Captured %1$s ago</string>
+    <string name="action_clear_cache">Clear saved data</string>
 
     <string name="theme_action">Theme</string>
     <string name="theme_label_system">System</string>

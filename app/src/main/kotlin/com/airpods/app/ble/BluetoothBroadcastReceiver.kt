@@ -1,7 +1,9 @@
 package com.airpods.app.ble
 
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothAssignedNumbers
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothHeadset
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -41,6 +43,12 @@ object BluetoothBroadcastReceiver : BroadcastReceiver() {
     private const val EXTRA_CONNECTION_STATE = "android.bluetooth.profile.extra.STATE"
     private const val EXTRA_PREV_CONNECTION_STATE = "android.bluetooth.profile.extra.PREVIOUS_STATE"
 
+    // Apple's vendor-specific HFP AT command. When AirPods connect over
+    // Bluetooth Classic (HFP) they push battery via AT+IPHONEACCEV; the
+    // Android stack rebroadcasts it as a vendor-specific headset event,
+    // but ONLY to receivers registered with the Apple company-id category.
+    private const val IPHONEACCEV = "+IPHONEACCEV"
+
     @Volatile
     private var registered = false
 
@@ -76,8 +84,26 @@ object BluetoothBroadcastReceiver : BroadcastReceiver() {
             @Suppress("UnspecifiedRegisterReceiverFlag")
             context.applicationContext.registerReceiver(this, filter)
         }
+
+        // Separate filter for the vendor-specific HFP event. It MUST carry
+        // the Apple company-id category or the system won't deliver it.
+        // (Categories can't share the catch-all filter above — they'd then
+        // be required on every other action too.)
+        val vendorFilter = IntentFilter(BluetoothHeadset.ACTION_VENDOR_SPECIFIC_HEADSET_EVENT).apply {
+            addCategory(
+                BluetoothHeadset.VENDOR_SPECIFIC_HEADSET_EVENT_COMPANY_ID_CATEGORY +
+                    "." + BluetoothAssignedNumbers.APPLE
+            )
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.applicationContext.registerReceiver(this, vendorFilter, flags)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            context.applicationContext.registerReceiver(this, vendorFilter)
+        }
+
         registered = true
-        AppLogger.i(TAG, "registered for ${filter.countActions()} BT actions")
+        AppLogger.i(TAG, "registered for ${filter.countActions()} BT actions + Apple HFP vendor event")
     }
 
     fun unregister(context: Context) {
@@ -122,7 +148,71 @@ object BluetoothBroadcastReceiver : BroadcastReceiver() {
                     else if (newState == 0) AirPodsRepository.setAudioConnected(null)
                 }
             }
+            BluetoothHeadset.ACTION_VENDOR_SPECIFIC_HEADSET_EVENT -> {
+                handleVendorEvent(intent, name)
+            }
         }
+    }
+
+    private fun handleVendorEvent(intent: Intent, name: String) {
+        val cmd = intent.getStringExtra(
+            BluetoothHeadset.EXTRA_VENDOR_SPECIFIC_HEADSET_EVENT_CMD
+        )
+        val args = intent.getSerializableExtra(
+            BluetoothHeadset.EXTRA_VENDOR_SPECIFIC_HEADSET_EVENT_ARGS
+        ) as? Array<*>
+        val rendered = args?.joinToString(",") { it.toString() } ?: "null"
+        AppLogger.i(TAG, "vendorEvent cmd=$cmd device='$name' args=[$rendered]")
+
+        if (cmd != IPHONEACCEV) return
+        if (args == null || args.isEmpty()) return
+
+        // Format: args[0] = number of key/value pairs, then key,value,...
+        // key 1 = battery (0..9, real% = (v+1)*10), key 2 = charging (1 = yes).
+        val numPairs = args[0].toIntSafe() ?: return
+        var battery: Int? = null
+        var charging = false
+        for (i in 0 until numPairs) {
+            val keyIdx = 1 + i * 2
+            val valIdx = keyIdx + 1
+            if (valIdx >= args.size) break
+            val key = args[keyIdx].toIntSafe() ?: continue
+            val value = args[valIdx].toIntSafe() ?: continue
+            when (key) {
+                1 -> if (value in 0..9) battery = (value + 1) * 10
+                2 -> charging = value == 1
+            }
+        }
+
+        if (battery != null) {
+            AppLogger.i(TAG, "→ IPHONEACCEV battery=$battery% charging=$charging")
+            publishHfpBattery(battery, charging)
+        }
+    }
+
+    private fun Any?.toIntSafe(): Int? = when (this) {
+        is Int -> this
+        is Number -> toInt()
+        is String -> trim().toIntOrNull()
+        else -> null
+    }
+
+    private fun publishHfpBattery(level: Int, charging: Boolean) {
+        val current = AirPodsRepository.state.value.snapshot
+        val snap = (current ?: AirPodsSnapshot(
+            model = AirPodsModel.AIRPODS_PRO_2,
+            leftPct = null, rightPct = null, casePct = null,
+            leftCharging = false, rightCharging = false, caseCharging = false,
+            inCase = false, rssi = -50,
+            timestampMs = System.currentTimeMillis()
+        )).copy(
+            leftPct = level,
+            rightPct = level,
+            leftCharging = charging,
+            rightCharging = charging,
+            timestampMs = System.currentTimeMillis()
+        )
+        AirPodsRepository.onSnapshot(snap)
     }
 
     private fun publishSyntheticSnapshot(level: Int) {

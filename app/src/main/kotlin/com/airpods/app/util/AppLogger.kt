@@ -10,6 +10,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 object AppLogger {
 
@@ -88,7 +89,22 @@ object AppLogger {
      * Builds a single file with metadata + previous + current log content
      * inside the app's cache. Caller is expected to share it via FileProvider.
      */
+    /**
+     * Blocks until all queued log lines are flushed to disk.
+     * Useful right before reading the log file for sharing/export.
+     */
+    fun flushBlocking(timeoutMs: Long = 1500) {
+        try {
+            executor.submit { /* drain barrier */ }
+                .get(timeoutMs, TimeUnit.MILLISECONDS)
+        } catch (_: Throwable) {
+            // best-effort; proceed with whatever made it to disk
+        }
+    }
+
     fun snapshotForShare(context: Context): File {
+        i("Logger", "snapshotForShare requested by user")
+        flushBlocking()
         val dir = File(context.cacheDir, "logs").apply { mkdirs() }
         val out = File(dir, "airpods_share.log")
         out.bufferedWriter().use { w ->

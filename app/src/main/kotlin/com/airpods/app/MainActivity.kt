@@ -13,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.airpods.app.ui.dashboard.DashboardScreen
 import com.airpods.app.ui.theme.AirPodsTheme
@@ -58,11 +59,22 @@ class MainActivity : ComponentActivity() {
                         ThemePrefs.set(this, next)
                     },
                     onShareLogs = {
-                        AppLogger.i("MainActivity", "user requested share logs")
+                        AppLogger.i("MainActivity", "user tapped Export logs")
                         runCatching {
                             LogShare.shareLogs(this, getString(R.string.action_share_logs))
-                        }.onFailure {
-                            AppLogger.e("MainActivity", "share failed", it)
+                        }.onSuccess {
+                            Toast.makeText(
+                                this,
+                                getString(R.string.toast_export_ok),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }.onFailure { err ->
+                            AppLogger.e("MainActivity", "share failed", err)
+                            Toast.makeText(
+                                this,
+                                getString(R.string.toast_export_failed, err.javaClass.simpleName),
+                                Toast.LENGTH_LONG
+                            ).show()
                         }
                     }
                 )

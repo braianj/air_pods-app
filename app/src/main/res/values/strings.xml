@@ -40,4 +40,6 @@
 
     <string name="action_share_logs">Share logs</string>
     <string name="action_export_logs">Export logs</string>
+    <string name="toast_export_ok">Logs ready, pick where to send them</string>
+    <string name="toast_export_failed">Could not export logs (%1$s)</string>
 </resources>

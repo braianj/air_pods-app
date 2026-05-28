@@ -36,6 +36,7 @@ class AirPodsBleService : LifecycleService() {
     private var notificationJob: Job? = null
     private var watchdogJob: Job? = null
     private var audioMonitor: ConnectedAirPodsMonitor? = null
+    private var gattProbe: AirPodsGattProbe? = null
 
     private var lastSnapshotAt: Long = 0L
     private var retryBackoffMs: Long = INITIAL_BACKOFF_MS
@@ -98,6 +99,26 @@ class AirPodsBleService : LifecycleService() {
     private fun startAudioMonitor() {
         audioMonitor?.stop()
         audioMonitor = ConnectedAirPodsMonitor(this).also { it.start(lifecycleScope) }
+
+        gattProbe?.stop()
+        gattProbe = AirPodsGattProbe(this).also { probe ->
+            probe.start(lifecycleScope) { findBondedAirPods() }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun findBondedAirPods(): android.bluetooth.BluetoothDevice? {
+        val bt = adapter ?: return null
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) !=
+            PackageManager.PERMISSION_GRANTED
+        ) return null
+        return runCatching {
+            bt.bondedDevices?.firstOrNull { device ->
+                val name = runCatching { device.name }.getOrNull() ?: return@firstOrNull false
+                name.contains("AirPods", ignoreCase = true) ||
+                    name.contains("Beats", ignoreCase = true)
+            }
+        }.getOrNull()
     }
 
     private fun startStatsLogger() {
@@ -269,6 +290,8 @@ class AirPodsBleService : LifecycleService() {
         statsJob?.cancel()
         audioMonitor?.stop()
         audioMonitor = null
+        gattProbe?.stop()
+        gattProbe = null
         BluetoothBroadcastReceiver.unregister(this)
         scanCallback?.let { cb ->
             runCatching { scanner?.stopScan(cb) }

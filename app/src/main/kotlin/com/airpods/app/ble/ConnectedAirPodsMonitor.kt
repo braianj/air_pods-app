@@ -225,6 +225,8 @@ class ConnectedAirPodsMonitor(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     private fun tryReadBatteryFromMetadata(device: BluetoothDevice) {
+        // Path 1 — the new untethered metadata API (gated by
+        // BLUETOOTH_PRIVILEGED on Android 16, so usually blocked).
         val left = readMetaInt(device, METADATA_UNTETHERED_LEFT_BATTERY)
         val right = readMetaInt(device, METADATA_UNTETHERED_RIGHT_BATTERY)
         val case = readMetaInt(device, METADATA_UNTETHERED_CASE_BATTERY)
@@ -235,11 +237,26 @@ class ConnectedAirPodsMonitor(private val context: Context) {
             TAG,
             "getMetadata L=$left R=$right case=$case chgL=$chgL chgR=$chgR chgC=$chgC"
         )
-        if (left != null || right != null || case != null) {
+
+        // Path 2 — legacy single-battery getBatteryLevel() (also @hide,
+        // but older and sometimes accessible).
+        val legacy = readLegacyBatteryLevel(device)
+        AppLogger.i(TAG, "getBatteryLevel() legacy=$legacy")
+
+        // Path 3 — read the model name metadata key (METADATA_MODEL_NAME=5)
+        // and the manufacturer name (1) just so we can confirm what
+        // SDK string the device reports.
+        val modelMeta = readMetaString(device, 5)
+        val mfgMeta = readMetaString(device, 1)
+        AppLogger.i(TAG, "metadata model='$modelMeta' mfg='$mfgMeta'")
+
+        val effectiveLeft = left ?: legacy
+        val effectiveRight = right ?: legacy
+        if (effectiveLeft != null || effectiveRight != null || case != null) {
             val snapshot = AirPodsSnapshot(
                 model = inferModel(device),
-                leftPct = left,
-                rightPct = right,
+                leftPct = effectiveLeft,
+                rightPct = effectiveRight,
                 casePct = case,
                 leftCharging = chgL ?: false,
                 rightCharging = chgR ?: false,
@@ -251,6 +268,23 @@ class ConnectedAirPodsMonitor(private val context: Context) {
             AirPodsRepository.onSnapshot(snapshot)
         }
     }
+
+    private fun readLegacyBatteryLevel(device: BluetoothDevice): Int? = try {
+        val method = device.javaClass.getMethod("getBatteryLevel")
+        val result = method.invoke(device) as? Int
+        // -1 means unknown, -100 means BT off, anything 0..100 is real
+        if (result != null && result in 0..100) result else null
+    } catch (t: Throwable) {
+        val real = (t as? java.lang.reflect.InvocationTargetException)?.targetException ?: t
+        AppLogger.d(TAG, "getBatteryLevel() failed: ${real.javaClass.simpleName}: ${real.message ?: ""}")
+        null
+    }
+
+    private fun readMetaString(device: BluetoothDevice, key: Int): String? = try {
+        val method = device.javaClass.getMethod("getMetadata", Integer.TYPE)
+        val raw = method.invoke(device, key) as? ByteArray
+        raw?.let { String(it, Charsets.UTF_8) }
+    } catch (_: Throwable) { null }
 
     private fun readMetaInt(device: BluetoothDevice, key: Int): Int? = try {
         val method = device.javaClass.getMethod("getMetadata", Integer.TYPE)

@@ -91,6 +91,7 @@ class AirPodsBleService : LifecycleService() {
         startWatchdog()
         startStatsLogger()
         startAudioMonitor()
+        BluetoothBroadcastReceiver.register(this)
         return START_STICKY
     }
 
@@ -268,6 +269,7 @@ class AirPodsBleService : LifecycleService() {
         statsJob?.cancel()
         audioMonitor?.stop()
         audioMonitor = null
+        BluetoothBroadcastReceiver.unregister(this)
         scanCallback?.let { cb ->
             runCatching { scanner?.stopScan(cb) }
         }

@@ -61,18 +61,25 @@ class AirPodsAapClient(private val context: Context) {
     fun start(scope: CoroutineScope, deviceProvider: () -> BluetoothDevice?) {
         job?.cancel()
         job = scope.launch(Dispatchers.IO) {
-            while (isActive) {
-                val device = deviceProvider()
-                if (device != null && hasConnectPermission()) {
-                    runCatching { connectAndListen(device) }
-                        .onFailure {
-                            AppLogger.w(TAG, "AAP session ended: ${it.javaClass.simpleName}: ${it.message}")
-                        }
-                }
-                closeSocket()
-                if (!isActive) break
-                delay(RETRY_MS)
+            // Try ONCE. Android's public createL2capChannel opens BLE L2CAP
+            // CoC; AirPods only accept AAP on classic L2CAP, which is gated
+            // behind BLUETOOTH_PRIVILEGED. The first attempt logs the
+            // exact failure for diagnostics, then we give up — retrying
+            // forever just burns battery on a path that can't open.
+            val device = deviceProvider()
+            if (device == null || !hasConnectPermission()) {
+                AppLogger.i(TAG, "no bonded AirPods or BT_CONNECT denied — skipping AAP")
+                return@launch
             }
+            runCatching { connectAndListen(device) }
+                .onFailure {
+                    AppLogger.w(
+                        TAG,
+                        "AAP path unavailable on stock Android (need classic L2CAP/root): " +
+                            "${it.javaClass.simpleName}: ${it.message}"
+                    )
+                }
+            closeSocket()
         }
     }
 

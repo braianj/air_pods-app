@@ -51,4 +51,13 @@
     <string name="update_progress_unknown">Descargando…</string>
     <string name="update_needs_install_perm">Habilitá instalar desde esta app y volvé a intentar.</string>
     <string name="update_error">Falló la actualización: %1$s</string>
+
+    <string name="update_available_title">Hay actualización</string>
+    <string name="update_available_body">Nueva versión %1$s lista (tenés %2$s). ¿Instalar ahora?</string>
+    <string name="update_install_now">Instalar</string>
+    <string name="update_later">Después</string>
+
+    <string name="qs_tile_label">AirPods</string>
+    <string name="qs_tile_no_data">Tocá para abrir · sin datos aún</string>
+    <string name="qs_tile_audio_only">%1$s · abrí la tapa</string>
 </resources>

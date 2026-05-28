@@ -51,4 +51,13 @@
     <string name="update_progress_unknown">Downloading…</string>
     <string name="update_needs_install_perm">Allow this app to install updates, then try again.</string>
     <string name="update_error">Update failed: %1$s</string>
+
+    <string name="update_available_title">Update available</string>
+    <string name="update_available_body">New build %1$s ready (you have %2$s). Install it now?</string>
+    <string name="update_install_now">Install</string>
+    <string name="update_later">Later</string>
+
+    <string name="qs_tile_label">AirPods</string>
+    <string name="qs_tile_no_data">Tap to open · no data yet</string>
+    <string name="qs_tile_audio_only">%1$s · open the case lid</string>
 </resources>

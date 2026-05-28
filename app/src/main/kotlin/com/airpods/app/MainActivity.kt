@@ -9,22 +9,33 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.airpods.app.ui.dashboard.DashboardScreen
 import com.airpods.app.ui.theme.AirPodsTheme
 import com.airpods.app.ui.theme.ThemePrefs
+import com.airpods.app.update.UpdateChecker
 import com.airpods.app.update.Updater
 import com.airpods.app.util.AppLogger
 import com.airpods.app.util.LogShare
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+
+    private val pendingUpdate = MutableStateFlow<UpdateChecker.UpdateInfo?>(null)
+    private val updateDismissed = MutableStateFlow(false)
 
     private val requiredPermissions: Array<String>
         get() = buildList {
@@ -39,9 +50,12 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         AppLogger.i("MainActivity", "onCreate, granted=${currentPermissions()}")
+        kickoffUpdateCheck()
 
         setContent {
             val themePref by ThemePrefs.flow.collectAsState()
+            val update by pendingUpdate.collectAsState()
+            val dismissed by updateDismissed.collectAsState()
             AirPodsTheme(pref = themePref) {
                 var hasPermissions by remember {
                     mutableStateOf(checkPermissions())
@@ -64,6 +78,31 @@ class MainActivity : ComponentActivity() {
                     onShareLogs = ::exportLogs,
                     onCheckUpdate = ::checkUpdate
                 )
+
+                val info = update
+                if (info != null && !dismissed) {
+                    UpdateAvailableDialog(
+                        info = info,
+                        onInstall = {
+                            updateDismissed.value = true
+                            checkUpdate()
+                        },
+                        onLater = {
+                            updateDismissed.value = true
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    private fun kickoffUpdateCheck() {
+        lifecycleScope.launch {
+            delay(1_500)
+            val info = UpdateChecker.check()
+            if (info != null) {
+                AppLogger.i("MainActivity", "auto-update available: $info")
+                pendingUpdate.value = info
             }
         }
     }
@@ -112,4 +151,35 @@ class MainActivity : ComponentActivity() {
         requiredPermissions.associateWith {
             ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
         }
+}
+
+@Composable
+private fun UpdateAvailableDialog(
+    info: UpdateChecker.UpdateInfo,
+    onInstall: () -> Unit,
+    onLater: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onLater,
+        title = { Text(stringResource(R.string.update_available_title)) },
+        text = {
+            Text(
+                stringResource(
+                    R.string.update_available_body,
+                    info.latestShort,
+                    info.installedShort
+                )
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onInstall) {
+                Text(stringResource(R.string.update_install_now))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onLater) {
+                Text(stringResource(R.string.update_later))
+            }
+        }
+    )
 }

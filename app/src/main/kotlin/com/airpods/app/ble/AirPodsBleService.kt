@@ -43,6 +43,11 @@ class AirPodsBleService : LifecycleService() {
     private var lastLoggedModel: AirPodsModel? = null
     private var snapshotsSeen: Int = 0
 
+    // Dedup so the per-packet log isn't flooded by identical adverts (the
+    // scanner repeats the same advertisement hundreds of times per second).
+    private var lastLogged07Hex: String? = null
+    private var lastLoggedParseLine: String? = null
+
     // Diagnostic counters refreshed by the stats job
     private val subtypeCounts = java.util.HashMap<Int, Int>()
     private var statsJob: Job? = null
@@ -191,15 +196,21 @@ class AirPodsBleService : LifecycleService() {
                 synchronized(subtypeCounts) {
                     subtypeCounts[subtype] = (subtypeCounts[subtype] ?: 0) + 1
                 }
-                AppLogger.d(
-                    TAG,
-                    "Apple pkt subtype=0x%02X len=%d rssi=%d head=%s".format(
-                        subtype,
-                        length,
-                        result.rssi,
-                        mfg.take(12).toByteArray().toHex()
-                    )
-                )
+
+                // Only the proximity-pairing subtype (0x07) can carry battery.
+                // Log it in FULL (not truncated) and only when the bytes
+                // actually change, so the rare unencrypted packet survives in
+                // the rotated log instead of being buried under noise.
+                if (subtype == 0x07) {
+                    val fullHex = mfg.toHex()
+                    if (fullHex != lastLogged07Hex) {
+                        lastLogged07Hex = fullHex
+                        AppLogger.i(
+                            TAG,
+                            "0x07 pkt len=$length rssi=${result.rssi} bytes=$fullHex"
+                        )
+                    }
+                }
 
                 val snapshot = AirPodsParser.parse(mfg, result.rssi)
                 if (snapshot == null) return
@@ -207,16 +218,20 @@ class AirPodsBleService : LifecycleService() {
                 lastSnapshotAt = System.currentTimeMillis()
                 retryBackoffMs = INITIAL_BACKOFF_MS
                 snapshotsSeen++
-                if (snapshot.model != lastLoggedModel || snapshotsSeen % 5 == 1) {
+                // Log the parsed result together with the raw bytes, but only
+                // when the parsed values change — this is what lets us verify
+                // the byte→pod mapping against a real packet.
+                val parseLine = "model=${snapshot.model} L=${snapshot.leftPct}% " +
+                    "R=${snapshot.rightPct}% case=${snapshot.casePct}% " +
+                    "chgL=${snapshot.leftCharging} chgR=${snapshot.rightCharging} " +
+                    "chgCase=${snapshot.caseCharging} inCase=${snapshot.inCase}"
+                if (parseLine != lastLoggedParseLine) {
+                    lastLoggedParseLine = parseLine
+                    lastLoggedModel = snapshot.model
                     AppLogger.i(
                         TAG,
-                        "snapshot #$snapshotsSeen model=${snapshot.model} " +
-                            "L=${snapshot.leftPct}% R=${snapshot.rightPct}% " +
-                            "case=${snapshot.casePct}% chgL=${snapshot.leftCharging} " +
-                            "chgR=${snapshot.rightCharging} chgCase=${snapshot.caseCharging} " +
-                            "rssi=${snapshot.rssi}"
+                        "PARSED #$snapshotsSeen $parseLine rssi=${snapshot.rssi} raw=${mfg.toHex()}"
                     )
-                    lastLoggedModel = snapshot.model
                 }
                 AirPodsRepository.onSnapshot(snapshot)
             }

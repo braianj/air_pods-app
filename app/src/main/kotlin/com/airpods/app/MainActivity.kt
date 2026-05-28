@@ -17,6 +17,8 @@ import androidx.core.content.ContextCompat
 import com.airpods.app.ui.dashboard.DashboardScreen
 import com.airpods.app.ui.theme.AirPodsTheme
 import com.airpods.app.ui.theme.ThemePrefs
+import com.airpods.app.util.AppLogger
+import com.airpods.app.util.LogShare
 
 class MainActivity : ComponentActivity() {
 
@@ -32,6 +34,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        AppLogger.i("MainActivity", "onCreate, granted=${currentPermissions()}")
 
         setContent {
             val themePref by ThemePrefs.flow.collectAsState()
@@ -42,13 +45,26 @@ class MainActivity : ComponentActivity() {
                 val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestMultiplePermissions()
                 ) { result ->
+                    AppLogger.i("MainActivity", "permission result: $result")
                     hasPermissions = result.values.all { it }
                 }
                 DashboardScreen(
                     hasPermissions = hasPermissions,
                     onRequestPermissions = { launcher.launch(requiredPermissions) },
                     themePreference = themePref,
-                    onCycleTheme = { ThemePrefs.set(this, themePref.next()) }
+                    onCycleTheme = {
+                        val next = themePref.next()
+                        AppLogger.i("MainActivity", "theme cycled to $next")
+                        ThemePrefs.set(this, next)
+                    },
+                    onShareLogs = {
+                        AppLogger.i("MainActivity", "user requested share logs")
+                        runCatching {
+                            LogShare.shareLogs(this, getString(R.string.action_share_logs))
+                        }.onFailure {
+                            AppLogger.e("MainActivity", "share failed", it)
+                        }
+                    }
                 )
             }
         }
@@ -56,6 +72,11 @@ class MainActivity : ComponentActivity() {
 
     private fun checkPermissions(): Boolean =
         requiredPermissions.all {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        }
+
+    private fun currentPermissions(): Map<String, Boolean> =
+        requiredPermissions.associateWith {
             ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
         }
 }

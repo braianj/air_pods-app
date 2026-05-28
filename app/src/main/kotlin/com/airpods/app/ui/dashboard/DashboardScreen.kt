@@ -60,6 +60,7 @@ fun DashboardScreen(
     onRequestPermissions: () -> Unit,
     themePreference: ThemePreference = ThemePreference.SYSTEM,
     onCycleTheme: () -> Unit = {},
+    onShareLogs: () -> Unit = {},
     viewModel: DashboardViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -75,6 +76,13 @@ fun DashboardScreen(
                     )
                 },
                 actions = {
+                    IconButton(onClick = onShareLogs) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_share),
+                            contentDescription = stringResource(R.string.action_share_logs),
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
                     ThemeToggleButton(
                         current = themePreference,
                         onClick = onCycleTheme

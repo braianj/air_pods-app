@@ -37,4 +37,6 @@
     <string name="theme_label_system">Sistema</string>
     <string name="theme_label_light">Claro</string>
     <string name="theme_label_dark">Oscuro</string>
+
+    <string name="action_share_logs">Compartir logs</string>
 </resources>

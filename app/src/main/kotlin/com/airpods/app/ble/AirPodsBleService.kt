@@ -14,12 +14,12 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
-import android.util.Log
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.airpods.app.notification.BatteryNotificationManager
+import com.airpods.app.util.AppLogger
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -38,17 +38,22 @@ class AirPodsBleService : LifecycleService() {
 
     private var lastSnapshotAt: Long = 0L
     private var retryBackoffMs: Long = INITIAL_BACKOFF_MS
+    private var lastLoggedModel: AirPodsModel? = null
+    private var snapshotsSeen: Int = 0
 
     override fun onCreate() {
         super.onCreate()
+        AppLogger.i(TAG, "onCreate")
         BatteryNotificationManager.ensureChannel(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
+        AppLogger.i(TAG, "onStartCommand action=${intent?.action}")
 
         when (intent?.action) {
             ACTION_STOP -> {
+                AppLogger.i(TAG, "stop requested")
                 stopForegroundAndScan()
                 stopSelf()
                 return START_NOT_STICKY
@@ -59,12 +64,19 @@ class AirPodsBleService : LifecycleService() {
         startForegroundCompat(notif)
 
         if (!hasPermissions()) {
+            AppLogger.w(TAG, "missing BLUETOOTH_SCAN or BLUETOOTH_CONNECT permission — staying idle")
             AirPodsRepository.setStatus(ConnectionStatus.MissingPermissions)
             return START_STICKY
         }
 
         val bt = adapter
-        if (bt == null || !bt.isEnabled) {
+        if (bt == null) {
+            AppLogger.w(TAG, "no BluetoothAdapter available")
+            AirPodsRepository.setStatus(ConnectionStatus.BluetoothOff)
+            return START_STICKY
+        }
+        if (!bt.isEnabled) {
+            AppLogger.w(TAG, "Bluetooth adapter is OFF")
             AirPodsRepository.setStatus(ConnectionStatus.BluetoothOff)
             return START_STICKY
         }
@@ -81,6 +93,7 @@ class AirPodsBleService : LifecycleService() {
         } else {
             0
         }
+        AppLogger.i(TAG, "startForeground type=$type")
         ServiceCompat.startForeground(this, BatteryNotificationManager.NOTIF_ID, notif, type)
     }
 
@@ -89,13 +102,12 @@ class AirPodsBleService : LifecycleService() {
         val bt = adapter ?: return
         val s = bt.bluetoothLeScanner
         if (s == null) {
+            AppLogger.e(TAG, "bluetoothLeScanner is null (BT off?)")
             AirPodsRepository.setStatus(ConnectionStatus.Error("Scanner unavailable"))
             return
         }
         scanner = s
 
-        // Filter for Apple manufacturer data starting with the proximity-pairing
-        // header (0x07 0x19). The mask ensures we only match those two bytes.
         val filter = ScanFilter.Builder()
             .setManufacturerData(
                 AirPodsParser.APPLE_MANUFACTURER_ID,
@@ -114,14 +126,37 @@ class AirPodsBleService : LifecycleService() {
                 val mfg = result.scanRecord?.getManufacturerSpecificData(
                     AirPodsParser.APPLE_MANUFACTURER_ID
                 )
-                val snapshot = AirPodsParser.parse(mfg, result.rssi) ?: return
+                if (mfg == null) {
+                    AppLogger.d(TAG, "scan hit but no Apple manufacturer data (rssi=${result.rssi})")
+                    return
+                }
+                val snapshot = AirPodsParser.parse(mfg, result.rssi)
+                if (snapshot == null) {
+                    AppLogger.d(
+                        TAG,
+                        "parse rejected: bytes=${mfg.toHex()} rssi=${result.rssi}"
+                    )
+                    return
+                }
                 lastSnapshotAt = System.currentTimeMillis()
                 retryBackoffMs = INITIAL_BACKOFF_MS
+                snapshotsSeen++
+                if (snapshot.model != lastLoggedModel || snapshotsSeen % 5 == 1) {
+                    AppLogger.i(
+                        TAG,
+                        "snapshot #$snapshotsSeen model=${snapshot.model} " +
+                            "L=${snapshot.leftPct}% R=${snapshot.rightPct}% " +
+                            "case=${snapshot.casePct}% chgL=${snapshot.leftCharging} " +
+                            "chgR=${snapshot.rightCharging} chgCase=${snapshot.caseCharging} " +
+                            "rssi=${snapshot.rssi}"
+                    )
+                    lastLoggedModel = snapshot.model
+                }
                 AirPodsRepository.onSnapshot(snapshot)
             }
 
             override fun onScanFailed(errorCode: Int) {
-                Log.w(TAG, "Scan failed: code=$errorCode")
+                AppLogger.e(TAG, "onScanFailed code=$errorCode")
                 AirPodsRepository.setStatus(
                     ConnectionStatus.Error("Scan failed ($errorCode)")
                 )
@@ -132,13 +167,14 @@ class AirPodsBleService : LifecycleService() {
         scanCallback = callback
         try {
             s.startScan(listOf(filter), settings, callback)
+            AppLogger.i(TAG, "startScan ok, filter=Apple/0x07,0x19, mode=LOW_LATENCY")
             AirPodsRepository.setStatus(ConnectionStatus.Scanning)
         } catch (se: SecurityException) {
+            AppLogger.w(TAG, "SecurityException starting scan", se)
             AirPodsRepository.setStatus(ConnectionStatus.MissingPermissions)
-            Log.w(TAG, "SecurityException starting scan", se)
         } catch (e: Exception) {
+            AppLogger.e(TAG, "failed to start scan", e)
             AirPodsRepository.setStatus(ConnectionStatus.Error(e.message ?: "scan error"))
-            Log.e(TAG, "Failed to start scan", e)
         }
     }
 
@@ -146,6 +182,7 @@ class AirPodsBleService : LifecycleService() {
     private fun scheduleRetry() {
         lifecycleScope.launch {
             val backoff = retryBackoffMs.coerceAtMost(MAX_BACKOFF_MS)
+            AppLogger.i(TAG, "scheduleRetry in ${backoff}ms")
             delay(backoff)
             retryBackoffMs = (retryBackoffMs * 2).coerceAtMost(MAX_BACKOFF_MS)
             scanCallback?.let { cb ->
@@ -172,6 +209,7 @@ class AirPodsBleService : LifecycleService() {
                 delay(STALE_AFTER_MS)
                 val age = System.currentTimeMillis() - lastSnapshotAt
                 if (lastSnapshotAt != 0L && age > STALE_AFTER_MS) {
+                    AppLogger.i(TAG, "watchdog: no snapshot for ${age}ms — marking lost")
                     AirPodsRepository.onLost()
                 }
             }
@@ -180,6 +218,7 @@ class AirPodsBleService : LifecycleService() {
 
     @SuppressLint("MissingPermission")
     private fun stopForegroundAndScan() {
+        AppLogger.i(TAG, "stopForegroundAndScan")
         watchdogJob?.cancel()
         notificationJob?.cancel()
         scanCallback?.let { cb ->
@@ -191,6 +230,7 @@ class AirPodsBleService : LifecycleService() {
     }
 
     override fun onDestroy() {
+        AppLogger.i(TAG, "onDestroy")
         stopForegroundAndScan()
         super.onDestroy()
     }
@@ -202,11 +242,15 @@ class AirPodsBleService : LifecycleService() {
         val connectOk = ContextCompat.checkSelfPermission(
             this, Manifest.permission.BLUETOOTH_CONNECT
         ) == PackageManager.PERMISSION_GRANTED
+        AppLogger.d(TAG, "hasPermissions scan=$scanOk connect=$connectOk")
         return scanOk && connectOk
     }
 
+    private fun ByteArray.toHex(): String =
+        joinToString(" ") { "%02X".format(it) }
+
     companion object {
-        private const val TAG = "AirPodsBleService"
+        private const val TAG = "Ble"
 
         const val ACTION_START = "com.airpods.app.action.START"
         const val ACTION_STOP = "com.airpods.app.action.STOP"
@@ -216,12 +260,14 @@ class AirPodsBleService : LifecycleService() {
         private const val MAX_BACKOFF_MS = 32_000L
 
         fun start(context: Context) {
+            AppLogger.i(TAG, "Service.start() called")
             val intent = Intent(context, AirPodsBleService::class.java)
                 .setAction(ACTION_START)
             ContextCompat.startForegroundService(context, intent)
         }
 
         fun stop(context: Context) {
+            AppLogger.i(TAG, "Service.stop() called")
             val intent = Intent(context, AirPodsBleService::class.java)
                 .setAction(ACTION_STOP)
             context.startService(intent)

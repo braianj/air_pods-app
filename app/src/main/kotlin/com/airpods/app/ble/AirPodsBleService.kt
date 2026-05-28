@@ -223,6 +223,18 @@ class AirPodsBleService : LifecycleService() {
                 val snapshot = AirPodsParser.parse(mfg, result.rssi)
                 if (snapshot == null) return
 
+                // Reject far-away AirPods from neighbors. The user's own pods
+                // are typically -30 to -65 dBm; anything weaker is somebody
+                // else's, and parsing it would flip the UI between unrelated
+                // devices. (OpenPods uses the same -60 threshold.)
+                if (result.rssi < MIN_RSSI_DBM) {
+                    AppLogger.d(
+                        TAG,
+                        "ignoring far AirPods rssi=${result.rssi} model=${snapshot.model}"
+                    )
+                    return
+                }
+
                 lastSnapshotAt = System.currentTimeMillis()
                 retryBackoffMs = INITIAL_BACKOFF_MS
                 snapshotsSeen++
@@ -361,6 +373,7 @@ class AirPodsBleService : LifecycleService() {
         private const val STALE_AFTER_MS = 30_000L
         private const val INITIAL_BACKOFF_MS = 1_000L
         private const val MAX_BACKOFF_MS = 32_000L
+        private const val MIN_RSSI_DBM = -65
 
         fun start(context: Context) {
             AppLogger.i(TAG, "Service.start() called")

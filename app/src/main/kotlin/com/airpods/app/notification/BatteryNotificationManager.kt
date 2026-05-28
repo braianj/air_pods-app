@@ -124,6 +124,8 @@ object BatteryNotificationManager {
         when (status) {
             ConnectionStatus.Idle -> context.getString(R.string.status_idle)
             ConnectionStatus.Scanning -> context.getString(R.string.status_scanning)
+            is ConnectionStatus.AudioConnected ->
+                context.getString(R.string.status_audio_connected, status.deviceName)
             is ConnectionStatus.Connected -> context.getString(R.string.status_connected)
             ConnectionStatus.BluetoothOff -> context.getString(R.string.status_bt_off)
             ConnectionStatus.MissingPermissions -> context.getString(R.string.status_missing_perms)

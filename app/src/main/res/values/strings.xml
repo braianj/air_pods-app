@@ -7,6 +7,7 @@
 
     <string name="status_idle">Idle</string>
     <string name="status_scanning">Searching for AirPods…</string>
+    <string name="status_audio_connected">%1$s · audio connected</string>
     <string name="status_connected">Connected</string>
     <string name="status_bt_off">Bluetooth is off</string>
     <string name="status_missing_perms">Missing Bluetooth permissions</string>
@@ -32,6 +33,7 @@
     <string name="action_grant_permissions">Grant Bluetooth permission</string>
 
     <string name="hint_open_lid">Open the AirPods case near the phone to see battery levels. Apple only broadcasts levels for ~30 seconds when the lid opens.</string>
+    <string name="hint_audio_connected">%1$s is connected for audio. Showing the last captured battery levels. Re-open the case lid near the phone to refresh — Android doesn\'t allow reading the live battery while the device is just connected for audio.</string>
 
     <string name="theme_action">Theme</string>
     <string name="theme_label_system">System</string>

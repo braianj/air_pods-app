@@ -248,6 +248,8 @@ private fun DashboardContent(
 
         if (state.snapshot == null) {
             HintCard()
+        } else if (state.audioConnectedName != null) {
+            AudioConnectedHintCard(state.audioConnectedName)
         }
     }
 }
@@ -259,6 +261,8 @@ private fun StatusCard(status: ConnectionStatus, modelName: String?) {
             stringResource(R.string.status_idle) to MaterialTheme.colorScheme.outline
         ConnectionStatus.Scanning ->
             stringResource(R.string.status_scanning) to MaterialTheme.colorScheme.tertiary
+        is ConnectionStatus.AudioConnected ->
+            stringResource(R.string.status_audio_connected, status.deviceName) to BatteryGood
         is ConnectionStatus.Connected ->
             stringResource(R.string.status_connected) to BatteryGood
         ConnectionStatus.BluetoothOff ->
@@ -597,6 +601,22 @@ private fun HintCard() {
             modifier = Modifier.padding(16.dp),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun AudioConnectedHintCard(name: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.hint_audio_connected, name),
+            modifier = Modifier.padding(16.dp),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onTertiaryContainer
         )
     }
 }

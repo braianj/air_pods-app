@@ -35,6 +35,7 @@ class AirPodsBleService : LifecycleService() {
     private var scanCallback: ScanCallback? = null
     private var notificationJob: Job? = null
     private var watchdogJob: Job? = null
+    private var audioMonitor: ConnectedAirPodsMonitor? = null
 
     private var lastSnapshotAt: Long = 0L
     private var retryBackoffMs: Long = INITIAL_BACKOFF_MS
@@ -89,7 +90,13 @@ class AirPodsBleService : LifecycleService() {
         observeStateForNotification()
         startWatchdog()
         startStatsLogger()
+        startAudioMonitor()
         return START_STICKY
+    }
+
+    private fun startAudioMonitor() {
+        audioMonitor?.stop()
+        audioMonitor = ConnectedAirPodsMonitor(this).also { it.start(lifecycleScope) }
     }
 
     private fun startStatsLogger() {
@@ -259,6 +266,8 @@ class AirPodsBleService : LifecycleService() {
         watchdogJob?.cancel()
         notificationJob?.cancel()
         statsJob?.cancel()
+        audioMonitor?.stop()
+        audioMonitor = null
         scanCallback?.let { cb ->
             runCatching { scanner?.stopScan(cb) }
         }

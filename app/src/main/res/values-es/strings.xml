@@ -7,6 +7,7 @@
 
     <string name="status_idle">En espera</string>
     <string name="status_scanning">Buscando AirPods…</string>
+    <string name="status_audio_connected">%1$s · audio conectado</string>
     <string name="status_connected">Conectado</string>
     <string name="status_bt_off">Bluetooth desactivado</string>
     <string name="status_missing_perms">Faltan permisos de Bluetooth</string>
@@ -32,6 +33,7 @@
     <string name="action_grant_permissions">Dar permisos de Bluetooth</string>
 
     <string name="hint_open_lid">Abrí la tapa del estuche cerca del teléfono para ver la batería. Apple solo emite el nivel durante unos 30 segundos al abrir la tapa.</string>
+    <string name="hint_audio_connected">%1$s está conectado para audio. Mostrando la última batería capturada. Volvé a abrir la tapa cerca del teléfono para refrescar — Android no permite leer la batería en vivo cuando el dispositivo solo está conectado por audio.</string>
 
     <string name="theme_action">Tema</string>
     <string name="theme_label_system">Sistema</string>

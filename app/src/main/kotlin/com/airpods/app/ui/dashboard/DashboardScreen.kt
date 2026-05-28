@@ -246,10 +246,11 @@ private fun DashboardContent(
         ExportLogsButton(onClick = onShareLogs)
         UpdateButton(onClick = onCheckUpdate)
 
+        val audioName = state.audioConnectedName
         if (state.snapshot == null) {
             HintCard()
-        } else if (state.audioConnectedName != null) {
-            AudioConnectedHintCard(state.audioConnectedName)
+        } else if (audioName != null) {
+            AudioConnectedHintCard(audioName)
         }
     }
 }

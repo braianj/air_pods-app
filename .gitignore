@@ -11,3 +11,7 @@ captures/
 *.aab
 *.jks
 *.keystore
+# debug keystore is intentionally committed so every CI build signs with
+# the same key — otherwise installing a new APK on top of the previous
+# one fails with INSTALL_FAILED_UPDATE_INCOMPATIBLE (signature mismatch).
+!app/debug.keystore

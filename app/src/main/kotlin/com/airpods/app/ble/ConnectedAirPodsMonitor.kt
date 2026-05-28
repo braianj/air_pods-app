@@ -5,10 +5,12 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothA2dp
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothHeadset
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.core.content.ContextCompat
 import com.airpods.app.util.AppLogger
 import kotlinx.coroutines.CoroutineScope
@@ -29,25 +31,29 @@ class ConnectedAirPodsMonitor(private val context: Context) {
         private const val METADATA_UNTETHERED_LEFT_CHARGING = 13
         private const val METADATA_UNTETHERED_RIGHT_CHARGING = 14
         private const val METADATA_UNTETHERED_CASE_CHARGING = 15
+
+        // BluetoothProfile.LE_AUDIO is API 33+ and stable. Hard-code the
+        // int so we don't need to reflect for older targets.
+        private const val PROFILE_LE_AUDIO = 22
     }
 
     private var pollJob: Job? = null
-    private var a2dpProxy: BluetoothA2dp? = null
-    private var listenerRegistered = false
+    private val proxies = mutableMapOf<Int, BluetoothProfile>()
+    private val profileNames = mapOf(
+        BluetoothProfile.HEADSET to "HFP",
+        BluetoothProfile.A2DP to "A2DP",
+        PROFILE_LE_AUDIO to "LE_AUDIO"
+    )
 
     private val profileListener = object : BluetoothProfile.ServiceListener {
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
-            if (profile == BluetoothProfile.A2DP) {
-                a2dpProxy = proxy as BluetoothA2dp
-                AppLogger.i(TAG, "A2DP proxy connected")
-                refresh()
-            }
+            proxies[profile] = proxy
+            AppLogger.i(TAG, "${profileNames[profile] ?: profile} proxy connected")
+            refresh()
         }
         override fun onServiceDisconnected(profile: Int) {
-            if (profile == BluetoothProfile.A2DP) {
-                a2dpProxy = null
-                AppLogger.i(TAG, "A2DP proxy disconnected")
-            }
+            proxies.remove(profile)
+            AppLogger.i(TAG, "${profileNames[profile] ?: profile} proxy disconnected")
         }
     }
 
@@ -60,10 +66,11 @@ class ConnectedAirPodsMonitor(private val context: Context) {
             AppLogger.w(TAG, "BLUETOOTH_CONNECT not granted — skipping audio monitor")
             return
         }
-        if (!listenerRegistered) {
-            val ok = adapter.getProfileProxy(context, profileListener, BluetoothProfile.A2DP)
-            AppLogger.i(TAG, "getProfileProxy returned $ok")
-            listenerRegistered = ok
+
+        adapter.getProfileProxy(context, profileListener, BluetoothProfile.HEADSET)
+        adapter.getProfileProxy(context, profileListener, BluetoothProfile.A2DP)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            adapter.getProfileProxy(context, profileListener, PROFILE_LE_AUDIO)
         }
 
         pollJob?.cancel()
@@ -78,35 +85,142 @@ class ConnectedAirPodsMonitor(private val context: Context) {
     fun stop() {
         pollJob?.cancel()
         val adapter = adapter()
-        runCatching {
-            a2dpProxy?.let { adapter?.closeProfileProxy(BluetoothProfile.A2DP, it) }
+        proxies.forEach { (profile, proxy) ->
+            runCatching { adapter?.closeProfileProxy(profile, proxy) }
         }
-        a2dpProxy = null
-        listenerRegistered = false
+        proxies.clear()
     }
 
     @SuppressLint("MissingPermission")
     private fun refresh() {
         if (!hasConnectPermission()) return
-        val proxy = a2dpProxy ?: return
-        val devices = try {
-            proxy.connectedDevices
+        val adapter = adapter() ?: return
+
+        AppLogger.i(
+            TAG,
+            "adapter state=${adapterStateName(adapter.state)} " +
+                "name='${safeAdapterName(adapter)}' " +
+                "scanMode=${adapter.scanMode} " +
+                "LE_supported=${adapter.isLeAudioSupported()} " +
+                "proxies=${proxies.keys.map { profileNames[it] ?: it }}"
+        )
+
+        // 1) List all bonded devices — this works regardless of profile state.
+        val bonded = try {
+            adapter.bondedDevices ?: emptySet()
         } catch (e: SecurityException) {
-            AppLogger.w(TAG, "no permission for connectedDevices", e)
-            return
+            AppLogger.w(TAG, "bondedDevices denied", e); emptySet()
         }
-        AppLogger.i(TAG, "A2DP connectedDevices count=${devices.size}")
-        var foundAirPods: String? = null
-        for (device in devices) {
-            val name = safeName(device) ?: continue
+        AppLogger.i(TAG, "bonded count=${bonded.size}")
+
+        var foundAirPods: BluetoothDevice? = null
+        var foundName: String? = null
+
+        for (device in bonded) {
+            val name = safeName(device) ?: "(no name)"
             val addr = device.address
-            AppLogger.i(TAG, "A2DP device name='$name' addr=$addr")
-            if (isAirPods(name)) {
-                foundAirPods = name
-                tryReadBatteryFromMetadata(device)
+            val type = btTypeName(device.type)
+            val bondState = bondStateName(device.bondState)
+            val states = describeConnectionStates(device)
+            AppLogger.i(
+                TAG,
+                "bonded device='$name' addr=$addr type=$type bond=$bondState [$states]"
+            )
+            if (isAirPods(name) && foundAirPods == null) {
+                foundAirPods = device
+                foundName = name
             }
         }
-        AirPodsRepository.setAudioConnected(foundAirPods)
+
+        // 2) Also check each profile's connectedDevices set (in case bonded
+        //    iteration somehow misses something).
+        for ((profile, proxy) in proxies) {
+            val devices = try {
+                proxy.connectedDevices
+            } catch (e: SecurityException) {
+                AppLogger.w(TAG, "connectedDevices(${profileNames[profile]}) denied", e); continue
+            }
+            AppLogger.i(TAG, "${profileNames[profile]} connectedDevices count=${devices.size}")
+            for (device in devices) {
+                val name = safeName(device) ?: continue
+                AppLogger.i(TAG, "${profileNames[profile]} connected name='$name' addr=${device.address}")
+                if (isAirPods(name) && foundAirPods == null) {
+                    foundAirPods = device
+                    foundName = name
+                }
+            }
+        }
+
+        if (foundAirPods != null && foundName != null) {
+            AirPodsRepository.setAudioConnected(foundName)
+            tryReadBatteryFromMetadata(foundAirPods)
+        } else {
+            AirPodsRepository.setAudioConnected(null)
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun safeAdapterName(adapter: BluetoothAdapter): String? = try {
+        adapter.name
+    } catch (_: SecurityException) { null }
+
+    @SuppressLint("MissingPermission")
+    private fun BluetoothAdapter.isLeAudioSupported(): String =
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                this.isLeAudioSupported.toString()
+            } else "n/a-sdk"
+        } catch (_: Throwable) { "?" }
+
+    private fun adapterStateName(state: Int): String = when (state) {
+        BluetoothAdapter.STATE_OFF -> "off"
+        BluetoothAdapter.STATE_TURNING_ON -> "turning-on"
+        BluetoothAdapter.STATE_ON -> "ON"
+        BluetoothAdapter.STATE_TURNING_OFF -> "turning-off"
+        else -> "?$state"
+    }
+
+    private fun btTypeName(type: Int): String = when (type) {
+        BluetoothDevice.DEVICE_TYPE_CLASSIC -> "classic"
+        BluetoothDevice.DEVICE_TYPE_LE -> "le"
+        BluetoothDevice.DEVICE_TYPE_DUAL -> "dual"
+        BluetoothDevice.DEVICE_TYPE_UNKNOWN -> "unknown"
+        else -> "?$type"
+    }
+
+    private fun bondStateName(state: Int): String = when (state) {
+        BluetoothDevice.BOND_NONE -> "none"
+        BluetoothDevice.BOND_BONDING -> "bonding"
+        BluetoothDevice.BOND_BONDED -> "bonded"
+        else -> "?$state"
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun describeConnectionStates(device: BluetoothDevice): String {
+        val adapter = adapter() ?: return "no-adapter"
+        val list = mutableListOf<String>()
+        for ((profile, label) in profileNames) {
+            val state = try {
+                adapter.getProfileConnectionState(profile)
+                // Note: getProfileConnectionState returns the highest state
+                // across ALL devices for the given profile, not per-device.
+                // The per-device state we instead get from each proxy.
+                val proxy = proxies[profile]
+                proxy?.getConnectionState(device) ?: -1
+            } catch (e: SecurityException) { -1 }
+            if (state >= 0) {
+                list.add("$label=${stateName(state)}")
+            }
+        }
+        return if (list.isEmpty()) "no-proxies-yet" else list.joinToString(",")
+    }
+
+    private fun stateName(state: Int): String = when (state) {
+        BluetoothProfile.STATE_DISCONNECTED -> "off"
+        BluetoothProfile.STATE_CONNECTING -> "connecting"
+        BluetoothProfile.STATE_CONNECTED -> "ON"
+        BluetoothProfile.STATE_DISCONNECTING -> "disconnecting"
+        else -> "?$state"
     }
 
     @SuppressLint("MissingPermission")

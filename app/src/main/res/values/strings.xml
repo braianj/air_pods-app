@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AirPods</string>
+
+    <string name="notif_channel_name">AirPods battery</string>
+    <string name="notif_channel_description">Persistent battery level for connected AirPods.</string>
+
+    <string name="status_idle">Idle</string>
+    <string name="status_scanning">Searching for AirPods…</string>
+    <string name="status_connected">Connected</string>
+    <string name="status_bt_off">Bluetooth is off</string>
+    <string name="status_missing_perms">Missing Bluetooth permissions</string>
+    <string name="status_error">Error: %1$s</string>
+
+    <string name="bud_left">Left</string>
+    <string name="bud_right">Right</string>
+    <string name="case_title">Case</string>
+    <string name="case_open_lid_hint">Case (lid closed)</string>
+    <string name="charging">Charging</string>
+
+    <string name="proximity_title">Proximity</string>
+    <string name="proximity_touching">Touching distance</string>
+    <string name="proximity_near">Very near</string>
+    <string name="proximity_close">Close</string>
+    <string name="proximity_far">Far away</string>
+    <string name="proximity_lost">Lost signal</string>
+    <string name="proximity_unknown">No signal yet</string>
+    <string name="proximity_distance_fmt">~ %1$.1f m · RSSI %2$d dBm</string>
+
+    <string name="action_start">Start tracking</string>
+    <string name="action_stop">Stop tracking</string>
+    <string name="action_grant_permissions">Grant Bluetooth permission</string>
+
+    <string name="hint_open_lid">Open the AirPods case near the phone to see battery levels. Apple only broadcasts levels for ~30 seconds when the lid opens.</string>
+</resources>

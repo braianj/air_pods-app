@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AirPods</string>
+
+    <string name="notif_channel_name">Batería AirPods</string>
+    <string name="notif_channel_description">Notificación persistente con el nivel de batería de los AirPods conectados.</string>
+
+    <string name="status_idle">En espera</string>
+    <string name="status_scanning">Buscando AirPods…</string>
+    <string name="status_connected">Conectado</string>
+    <string name="status_bt_off">Bluetooth desactivado</string>
+    <string name="status_missing_perms">Faltan permisos de Bluetooth</string>
+    <string name="status_error">Error: %1$s</string>
+
+    <string name="bud_left">Izquierdo</string>
+    <string name="bud_right">Derecho</string>
+    <string name="case_title">Estuche</string>
+    <string name="case_open_lid_hint">Estuche (tapa cerrada)</string>
+    <string name="charging">Cargando</string>
+
+    <string name="proximity_title">Proximidad</string>
+    <string name="proximity_touching">Al alcance de la mano</string>
+    <string name="proximity_near">Muy cerca</string>
+    <string name="proximity_close">Cerca</string>
+    <string name="proximity_far">Lejos</string>
+    <string name="proximity_lost">Sin señal</string>
+    <string name="proximity_unknown">Sin señal todavía</string>
+    <string name="proximity_distance_fmt">~ %1$.1f m · RSSI %2$d dBm</string>
+
+    <string name="action_start">Empezar</string>
+    <string name="action_stop">Detener</string>
+    <string name="action_grant_permissions">Dar permisos de Bluetooth</string>
+
+    <string name="hint_open_lid">Abrí la tapa del estuche cerca del teléfono para ver la batería. Apple solo emite el nivel durante unos 30 segundos al abrir la tapa.</string>
+</resources>

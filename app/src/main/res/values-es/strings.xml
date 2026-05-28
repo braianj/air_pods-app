@@ -28,8 +28,8 @@
     <string name="proximity_unknown">Sin señal todavía</string>
     <string name="proximity_distance_fmt">~ %1$.1f m · RSSI %2$d dBm</string>
 
-    <string name="action_start">Empezar</string>
-    <string name="action_stop">Detener</string>
+    <string name="action_start">Buscar AirPods</string>
+    <string name="action_stop">Detener búsqueda</string>
     <string name="action_grant_permissions">Dar permisos de Bluetooth</string>
 
     <string name="hint_open_lid">Abrí la tapa del estuche cerca del teléfono para ver la batería. Apple solo emite el nivel durante unos 30 segundos al abrir la tapa.</string>

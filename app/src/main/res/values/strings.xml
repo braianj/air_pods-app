@@ -28,8 +28,8 @@
     <string name="proximity_unknown">No signal yet</string>
     <string name="proximity_distance_fmt">~ %1$.1f m · RSSI %2$d dBm</string>
 
-    <string name="action_start">Start tracking</string>
-    <string name="action_stop">Stop tracking</string>
+    <string name="action_start">Search for AirPods</string>
+    <string name="action_stop">Stop searching</string>
     <string name="action_grant_permissions">Grant Bluetooth permission</string>
 
     <string name="hint_open_lid">Open the AirPods case near the phone to see battery levels. Apple only broadcasts levels for ~30 seconds when the lid opens.</string>

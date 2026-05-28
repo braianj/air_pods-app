@@ -511,23 +511,48 @@ private fun ControlButtons(
         if (running) {
             FilledTonalButton(
                 onClick = onStop,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(56.dp),
                 shape = RoundedCornerShape(16.dp)
             ) {
-                Text(stringResource(R.string.action_stop))
+                Icon(
+                    painter = painterResource(R.drawable.ic_stop),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    stringResource(R.string.action_stop),
+                    style = MaterialTheme.typography.titleMedium
+                )
             }
         } else {
             Button(
                 onClick = onStart,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(56.dp),
                 shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors()
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
             ) {
+                Icon(
+                    painter = painterResource(
+                        if (!hasPermissions) R.drawable.ic_lock else R.drawable.ic_search
+                    ),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(8.dp))
                 Text(
                     text = if (!hasPermissions)
                         stringResource(R.string.action_grant_permissions)
                     else
-                        stringResource(R.string.action_start)
+                        stringResource(R.string.action_start),
+                    style = MaterialTheme.typography.titleMedium
                 )
             }
         }

@@ -5,9 +5,15 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Typeface
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.content.getSystemService
+import androidx.core.graphics.drawable.IconCompat
 import com.airpods.app.MainActivity
 import com.airpods.app.R
 import com.airpods.app.ble.AirPodsState
@@ -72,12 +78,37 @@ object BatteryNotificationManager {
             charging = snapshot?.caseCharging == true
         )
 
-        val notif = baseBuilder(context, statusLabel)
+        val builder = baseBuilder(context, statusLabel)
             .setCustomContentView(content)
             .setCustomBigContentView(content)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
-            .build()
-        nm.notify(NOTIF_ID, notif)
+
+        // Show the battery level as a number in the status bar. The system
+        // reserves the right edge (next to its own battery/clock) for itself,
+        // so this lands in the status-bar notification area on the left.
+        val statusBarPct = listOfNotNull(snapshot?.leftPct, snapshot?.rightPct).minOrNull()
+            ?: snapshot?.casePct
+        if (statusBarPct != null) {
+            builder.setSmallIcon(batteryStatusIcon(context, statusBarPct))
+        }
+
+        nm.notify(NOTIF_ID, builder.build())
+    }
+
+    private fun batteryStatusIcon(context: Context, pct: Int): IconCompat {
+        val size = (context.resources.displayMetrics.density * 24f).toInt().coerceAtLeast(24)
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val text = pct.coerceIn(0, 100).toString()
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textSize = size * if (text.length >= 3) 0.52f else 0.72f
+        }
+        val y = size / 2f - (paint.descent() + paint.ascent()) / 2f
+        canvas.drawText(text, size / 2f, y, paint)
+        return IconCompat.createWithBitmap(bmp)
     }
 
     private fun bindSlot(

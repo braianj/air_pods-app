@@ -36,7 +36,7 @@ class AirPodsBleService : LifecycleService() {
     private var notificationJob: Job? = null
     private var watchdogJob: Job? = null
     private var audioMonitor: ConnectedAirPodsMonitor? = null
-    private var gattProbe: AirPodsGattProbe? = null
+    private var aapClient: AirPodsAapClient? = null
 
     private var lastSnapshotAt: Long = 0L
     private var retryBackoffMs: Long = INITIAL_BACKOFF_MS
@@ -105,9 +105,11 @@ class AirPodsBleService : LifecycleService() {
         audioMonitor?.stop()
         audioMonitor = ConnectedAirPodsMonitor(this).also { it.start(lifecycleScope) }
 
-        gattProbe?.stop()
-        gattProbe = AirPodsGattProbe(this).also { probe ->
-            probe.start(lifecycleScope) { findBondedAirPods() }
+        // Primary live-battery path: speak Apple's AAP over L2CAP to the
+        // connected AirPods. Gives full per-pod battery without iCloud.
+        aapClient?.stop()
+        aapClient = AirPodsAapClient(this).also { client ->
+            client.start(lifecycleScope) { findBondedAirPods() }
         }
     }
 
@@ -305,8 +307,8 @@ class AirPodsBleService : LifecycleService() {
         statsJob?.cancel()
         audioMonitor?.stop()
         audioMonitor = null
-        gattProbe?.stop()
-        gattProbe = null
+        aapClient?.stop()
+        aapClient = null
         BluetoothBroadcastReceiver.unregister(this)
         scanCallback?.let { cb ->
             runCatching { scanner?.stopScan(cb) }

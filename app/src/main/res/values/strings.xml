@@ -32,4 +32,9 @@
     <string name="action_grant_permissions">Grant Bluetooth permission</string>
 
     <string name="hint_open_lid">Open the AirPods case near the phone to see battery levels. Apple only broadcasts levels for ~30 seconds when the lid opens.</string>
+
+    <string name="theme_action">Theme</string>
+    <string name="theme_label_system">System</string>
+    <string name="theme_label_light">Light</string>
+    <string name="theme_label_dark">Dark</string>
 </resources>

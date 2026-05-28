@@ -22,6 +22,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProgressIndicatorDefaults
@@ -50,12 +51,15 @@ import com.airpods.app.ble.ProximityReading
 import com.airpods.app.ui.theme.BatteryBad
 import com.airpods.app.ui.theme.BatteryGood
 import com.airpods.app.ui.theme.BatteryWarn
+import com.airpods.app.ui.theme.ThemePreference
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     hasPermissions: Boolean,
     onRequestPermissions: () -> Unit,
+    themePreference: ThemePreference = ThemePreference.SYSTEM,
+    onCycleTheme: () -> Unit = {},
     viewModel: DashboardViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -68,6 +72,12 @@ fun DashboardScreen(
                     Text(
                         text = stringResource(R.string.app_name),
                         style = MaterialTheme.typography.titleLarge
+                    )
+                },
+                actions = {
+                    ThemeToggleButton(
+                        current = themePreference,
+                        onClick = onCycleTheme
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -415,6 +425,28 @@ private fun ControlButtons(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ThemeToggleButton(
+    current: ThemePreference,
+    onClick: () -> Unit
+) {
+    val (iconRes, label) = when (current) {
+        ThemePreference.SYSTEM ->
+            R.drawable.ic_brightness_auto to stringResource(R.string.theme_label_system)
+        ThemePreference.LIGHT ->
+            R.drawable.ic_brightness_light to stringResource(R.string.theme_label_light)
+        ThemePreference.DARK ->
+            R.drawable.ic_brightness_dark to stringResource(R.string.theme_label_dark)
+    }
+    IconButton(onClick = onClick) {
+        Icon(
+            painter = painterResource(iconRes),
+            contentDescription = stringResource(R.string.theme_action) + ": " + label,
+            tint = MaterialTheme.colorScheme.onBackground
+        )
     }
 }
 

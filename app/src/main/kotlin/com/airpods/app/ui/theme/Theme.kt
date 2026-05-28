@@ -28,10 +28,15 @@ private val DarkScheme = darkColorScheme(
 
 @Composable
 fun AirPodsTheme(
-    dark: Boolean = isSystemInDarkTheme(),
+    pref: ThemePreference = ThemePreference.SYSTEM,
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
+    val dark = when (pref) {
+        ThemePreference.SYSTEM -> isSystemInDarkTheme()
+        ThemePreference.LIGHT -> false
+        ThemePreference.DARK -> true
+    }
     val context = LocalContext.current
     val scheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->

@@ -179,9 +179,15 @@ class AirPodsBleService : LifecycleService() {
             )
             .build()
 
+        // Use batch-scan mode (reportDelay > 0). The Bluetooth controller
+        // does the filtering at firmware level and delivers grouped results,
+        // which on most Android devices is MORE reliable than the immediate-
+        // callback mode for catching short bursts like the AirPods lid-open
+        // proximity-pairing packet. OpenPods/MaterialPods use the same trick.
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
+            .setReportDelay(1)
             .build()
 
         val callback = object : ScanCallback() {
@@ -236,6 +242,13 @@ class AirPodsBleService : LifecycleService() {
                     )
                 }
                 AirPodsRepository.onSnapshot(snapshot)
+            }
+
+            override fun onBatchScanResults(results: MutableList<ScanResult>) {
+                // Batch mode (reportDelay > 0) delivers grouped results here
+                // instead of via onScanResult. Process each one through the
+                // same path so parsing / persistence works either way.
+                for (r in results) onScanResult(0, r)
             }
 
             override fun onScanFailed(errorCode: Int) {

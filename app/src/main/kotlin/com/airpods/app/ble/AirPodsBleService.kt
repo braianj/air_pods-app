@@ -48,6 +48,11 @@ class AirPodsBleService : LifecycleService() {
     private var lastLogged07Hex: String? = null
     private var lastLoggedParseLine: String? = null
 
+    // Once we've seen a snapshot with strong RSSI (≥ STRONG_RSSI_DBM), lock
+    // onto that model for the rest of the session. Anything else — even at
+    // borderline RSSI — is somebody else's pair, reject it.
+    private var lockedModel: AirPodsModel? = null
+
     // Diagnostic counters refreshed by the stats job
     private val subtypeCounts = java.util.HashMap<Int, Int>()
     private var statsJob: Job? = null
@@ -235,6 +240,23 @@ class AirPodsBleService : LifecycleService() {
                     return
                 }
 
+                // Belt-and-suspenders: lock onto the model that comes in
+                // with strong signal. After that, reject anything with a
+                // different model id even if RSSI is borderline.
+                val locked = lockedModel
+                if (locked == null) {
+                    if (result.rssi >= STRONG_RSSI_DBM && snapshot.model != AirPodsModel.UNKNOWN) {
+                        lockedModel = snapshot.model
+                        AppLogger.i(TAG, "locked model=${snapshot.model} (rssi=${result.rssi})")
+                    }
+                } else if (snapshot.model != locked) {
+                    AppLogger.d(
+                        TAG,
+                        "ignoring foreign model ${snapshot.model} (locked=$locked) rssi=${result.rssi}"
+                    )
+                    return
+                }
+
                 lastSnapshotAt = System.currentTimeMillis()
                 retryBackoffMs = INITIAL_BACKOFF_MS
                 snapshotsSeen++
@@ -339,6 +361,7 @@ class AirPodsBleService : LifecycleService() {
             runCatching { scanner?.stopScan(cb) }
         }
         scanCallback = null
+        lockedModel = null
         synchronized(subtypeCounts) { subtypeCounts.clear() }
         AirPodsRepository.clear()
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -374,6 +397,8 @@ class AirPodsBleService : LifecycleService() {
         private const val INITIAL_BACKOFF_MS = 1_000L
         private const val MAX_BACKOFF_MS = 32_000L
         private const val MIN_RSSI_DBM = -65
+        // Strong-signal threshold to commit to a model id for the session.
+        private const val STRONG_RSSI_DBM = -55
 
         fun start(context: Context) {
             AppLogger.i(TAG, "Service.start() called")

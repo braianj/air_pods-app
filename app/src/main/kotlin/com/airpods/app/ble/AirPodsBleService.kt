@@ -41,6 +41,10 @@ class AirPodsBleService : LifecycleService() {
     private var lastLoggedModel: AirPodsModel? = null
     private var snapshotsSeen: Int = 0
 
+    // Diagnostic counters refreshed by the stats job
+    private val subtypeCounts = java.util.HashMap<Int, Int>()
+    private var statsJob: Job? = null
+
     override fun onCreate() {
         super.onCreate()
         AppLogger.i(TAG, "onCreate")
@@ -84,7 +88,24 @@ class AirPodsBleService : LifecycleService() {
         startScanning()
         observeStateForNotification()
         startWatchdog()
+        startStatsLogger()
         return START_STICKY
+    }
+
+    private fun startStatsLogger() {
+        statsJob?.cancel()
+        statsJob = lifecycleScope.launch {
+            while (true) {
+                delay(10_000)
+                val snapshot = synchronized(subtypeCounts) {
+                    if (subtypeCounts.isEmpty()) "(no Apple packets received yet)"
+                    else subtypeCounts.entries
+                        .sortedByDescending { it.value }
+                        .joinToString(", ") { (k, v) -> "0x%02X=%d".format(k, v) }
+                }
+                AppLogger.i(TAG, "stats(10s): apple_subtypes=[$snapshot] snapshots=$snapshotsSeen")
+            }
+        }
     }
 
     private fun startForegroundCompat(notif: android.app.Notification) {
@@ -108,11 +129,17 @@ class AirPodsBleService : LifecycleService() {
         }
         scanner = s
 
+        // Loose filter: accept ANY Apple manufacturer data, not just the
+        // proximity-pairing subtype. AirPods only broadcast 0x07/0x19 for
+        // ~30 s after the case lid opens; the rest of the time they emit
+        // other Continuity subtypes (Nearby 0x10, Handoff, AirDrop, etc.).
+        // The parser later filters by subtype + length, and we log every
+        // subtype we see so we can diagnose what's actually nearby.
         val filter = ScanFilter.Builder()
             .setManufacturerData(
                 AirPodsParser.APPLE_MANUFACTURER_ID,
-                byteArrayOf(0x07, 0x19),
-                byteArrayOf(0xFF.toByte(), 0xFF.toByte())
+                byteArrayOf(),
+                byteArrayOf()
             )
             .build()
 
@@ -126,18 +153,28 @@ class AirPodsBleService : LifecycleService() {
                 val mfg = result.scanRecord?.getManufacturerSpecificData(
                     AirPodsParser.APPLE_MANUFACTURER_ID
                 )
-                if (mfg == null) {
-                    AppLogger.d(TAG, "scan hit but no Apple manufacturer data (rssi=${result.rssi})")
+                if (mfg == null || mfg.isEmpty()) {
+                    AppLogger.d(TAG, "Apple hit but empty mfg data (rssi=${result.rssi})")
                     return
                 }
-                val snapshot = AirPodsParser.parse(mfg, result.rssi)
-                if (snapshot == null) {
-                    AppLogger.d(
-                        TAG,
-                        "parse rejected: bytes=${mfg.toHex()} rssi=${result.rssi}"
+                val subtype = mfg[0].toInt() and 0xFF
+                val length = if (mfg.size > 1) mfg[1].toInt() and 0xFF else -1
+                synchronized(subtypeCounts) {
+                    subtypeCounts[subtype] = (subtypeCounts[subtype] ?: 0) + 1
+                }
+                AppLogger.d(
+                    TAG,
+                    "Apple pkt subtype=0x%02X len=%d rssi=%d head=%s".format(
+                        subtype,
+                        length,
+                        result.rssi,
+                        mfg.take(12).toByteArray().toHex()
                     )
-                    return
-                }
+                )
+
+                val snapshot = AirPodsParser.parse(mfg, result.rssi)
+                if (snapshot == null) return
+
                 lastSnapshotAt = System.currentTimeMillis()
                 retryBackoffMs = INITIAL_BACKOFF_MS
                 snapshotsSeen++
@@ -221,10 +258,12 @@ class AirPodsBleService : LifecycleService() {
         AppLogger.i(TAG, "stopForegroundAndScan")
         watchdogJob?.cancel()
         notificationJob?.cancel()
+        statsJob?.cancel()
         scanCallback?.let { cb ->
             runCatching { scanner?.stopScan(cb) }
         }
         scanCallback = null
+        synchronized(subtypeCounts) { subtypeCounts.clear() }
         AirPodsRepository.clear()
         stopForeground(STOP_FOREGROUND_REMOVE)
     }

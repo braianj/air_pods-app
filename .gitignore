@@ -15,3 +15,8 @@ captures/
 # the same key — otherwise installing a new APK on top of the previous
 # one fails with INSTALL_FAILED_UPDATE_INCOMPATIBLE (signature mismatch).
 !app/debug.keystore
+
+# Claude Code: personal/uncommitted variants are excluded; the shared
+# CLAUDE.md and .claude/ folder are committed for everyone.
+CLAUDE.local.md
+.claude/settings.local.json

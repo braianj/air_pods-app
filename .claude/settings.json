@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git branch:*)",
+      "Bash(git show:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(curl -s:*api.github.com*)",
+      "Bash(curl -sIL:*api.github.com*)",
+      "Bash(curl -sL:*api.github.com*)",
+      "Bash(python3 -c:*)",
+      "Bash(wc:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(xmllint:*)",
+      "Bash(du:*)",
+      "mcp__github__list_releases",
+      "mcp__github__get_latest_release",
+      "mcp__github__list_commits",
+      "mcp__github__get_commit",
+      "mcp__github__get_file_contents",
+      "mcp__github__search_code"
+    ]
+  }
+}

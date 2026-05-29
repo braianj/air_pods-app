@@ -52,6 +52,9 @@
 
     <string name="action_check_update">Bajar e instalar actualización</string>
     <string name="action_grant_overlay">Activar popup sobre otras apps</string>
+    <string name="tab_popup">Popup</string>
+    <string name="tab_logs">Logs</string>
+    <string name="tab_update">Actualizar</string>
     <string name="update_dialog_title">Actualizando AirPods…</string>
     <string name="update_progress_fmt">%1$.0f %% · %2$s / %3$s</string>
     <string name="update_progress_unknown">Descargando…</string>

@@ -1,6 +1,7 @@
 package com.airpods.app.ui.dashboard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,8 +14,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -217,6 +220,7 @@ private fun DashboardContent(
         modifier = Modifier
             .fillMaxSize()
             .padding(padding)
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -249,9 +253,13 @@ private fun DashboardContent(
             onStop = onStop
         )
 
-        OverlayPermissionButton(onClick = onRequestOverlay)
-        ExportLogsButton(onClick = onShareLogs)
-        UpdateButton(onClick = onCheckUpdate)
+        // Secondary actions consolidated into a single compact tab-row so
+        // they stop eating vertical space.
+        ActionTabBar(
+            onShareLogs = onShareLogs,
+            onCheckUpdate = onCheckUpdate,
+            onRequestOverlay = onRequestOverlay
+        )
 
         val audioName = state.audioConnectedName
         val snap = state.snapshot
@@ -264,6 +272,8 @@ private fun DashboardContent(
                 onClear = onClearCache
             )
         }
+        // Bottom breathing room so the last card isn't flush with the nav bar.
+        Spacer(Modifier.height(24.dp))
     }
 }
 
@@ -571,53 +581,62 @@ private fun ControlButtons(
 }
 
 @Composable
-private fun OverlayPermissionButton(onClick: () -> Unit) {
-    FilledTonalButton(
-        onClick = onClick,
+private fun ActionTabBar(
+    onShareLogs: () -> Unit,
+    onCheckUpdate: () -> Unit,
+    onRequestOverlay: () -> Unit
+) {
+    Surface(
         modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
         shape = RoundedCornerShape(16.dp)
     ) {
-        Icon(
-            painter = painterResource(R.drawable.ic_airpods),
-            contentDescription = null,
-            modifier = Modifier.size(20.dp)
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(stringResource(R.string.action_grant_overlay))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            ActionTab(
+                iconRes = R.drawable.ic_airpods,
+                label = stringResource(R.string.tab_popup),
+                onClick = onRequestOverlay
+            )
+            ActionTab(
+                iconRes = R.drawable.ic_share,
+                label = stringResource(R.string.tab_logs),
+                onClick = onShareLogs
+            )
+            ActionTab(
+                iconRes = R.drawable.ic_update,
+                label = stringResource(R.string.tab_update),
+                onClick = onCheckUpdate
+            )
+        }
     }
 }
 
 @Composable
-private fun ExportLogsButton(onClick: () -> Unit) {
-    FilledTonalButton(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp)
+private fun ActionTab(iconRes: Int, label: String, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
-            painter = painterResource(R.drawable.ic_share),
-            contentDescription = null,
-            modifier = Modifier.size(20.dp)
+            painter = painterResource(iconRes),
+            contentDescription = label,
+            modifier = Modifier.size(24.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(Modifier.width(8.dp))
-        Text(stringResource(R.string.action_export_logs))
-    }
-}
-
-@Composable
-private fun UpdateButton(onClick: () -> Unit) {
-    FilledTonalButton(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Icon(
-            painter = painterResource(R.drawable.ic_update),
-            contentDescription = null,
-            modifier = Modifier.size(20.dp)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(Modifier.width(8.dp))
-        Text(stringResource(R.string.action_check_update))
     }
 }
 

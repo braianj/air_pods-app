@@ -66,6 +66,7 @@ fun DashboardScreen(
     onCycleTheme: () -> Unit = {},
     onShareLogs: () -> Unit = {},
     onCheckUpdate: () -> Unit = {},
+    onRequestOverlay: () -> Unit = {},
     viewModel: DashboardViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -112,7 +113,8 @@ fun DashboardScreen(
             onStop = viewModel::stop,
             onShareLogs = onShareLogs,
             onCheckUpdate = onCheckUpdate,
-            onClearCache = viewModel::clearCachedSnapshot
+            onClearCache = viewModel::clearCachedSnapshot,
+            onRequestOverlay = onRequestOverlay
         )
 
         UpdateOverlay(state = updateState, onDismiss = { Updater.reset() })
@@ -208,7 +210,8 @@ private fun DashboardContent(
     onStop: () -> Unit,
     onShareLogs: () -> Unit,
     onCheckUpdate: () -> Unit,
-    onClearCache: () -> Unit
+    onClearCache: () -> Unit,
+    onRequestOverlay: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -246,6 +249,7 @@ private fun DashboardContent(
             onStop = onStop
         )
 
+        OverlayPermissionButton(onClick = onRequestOverlay)
         ExportLogsButton(onClick = onShareLogs)
         UpdateButton(onClick = onCheckUpdate)
 
@@ -350,13 +354,12 @@ private fun BatteryRow(
 
 @Composable
 private fun CaseCard(pct: Int?, charging: Boolean, inCase: Boolean) {
+    // Don't expose `inCase` in the title — Apple only broadcasts while the
+    // lid is open, so a "lid closed" hint would never be accurate.
     BatteryCard(
         modifier = Modifier.fillMaxWidth(),
         iconRes = R.drawable.ic_case,
-        title = if (inCase)
-            stringResource(R.string.case_open_lid_hint)
-        else
-            stringResource(R.string.case_title),
+        title = stringResource(R.string.case_title),
         pct = pct,
         charging = charging
     )
@@ -564,6 +567,23 @@ private fun ControlButtons(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun OverlayPermissionButton(onClick: () -> Unit) {
+    FilledTonalButton(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_airpods),
+            contentDescription = null,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.action_grant_overlay))
     }
 }
 

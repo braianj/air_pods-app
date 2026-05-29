@@ -134,7 +134,13 @@ object BluetoothBroadcastReceiver : BroadcastReceiver() {
                 }
             }
             BluetoothDevice.ACTION_ACL_CONNECTED -> {
-                if (isAirPods(name)) AirPodsRepository.setAudioConnected(name)
+                if (isAirPods(name)) {
+                    AirPodsRepository.setAudioConnected(name)
+                    // Auto-start the BLE listener so a user who connects their
+                    // AirPods doesn't need to manually open the app and tap
+                    // "Buscar AirPods" first.
+                    AirPodsBleService.start(context.applicationContext)
+                }
             }
             BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
                 if (isAirPods(name)) AirPodsRepository.setAudioConnected(null)
@@ -144,8 +150,10 @@ object BluetoothBroadcastReceiver : BroadcastReceiver() {
             ACTION_LE_AUDIO_CONNECTION_STATE_CHANGED -> {
                 val newState = intent.getIntExtra(EXTRA_CONNECTION_STATE, -1)
                 if (isAirPods(name)) {
-                    if (newState == 2) AirPodsRepository.setAudioConnected(name)
-                    else if (newState == 0) AirPodsRepository.setAudioConnected(null)
+                    if (newState == 2) {
+                        AirPodsRepository.setAudioConnected(name)
+                        AirPodsBleService.start(context.applicationContext)
+                    } else if (newState == 0) AirPodsRepository.setAudioConnected(null)
                 }
             }
             BluetoothHeadset.ACTION_VENDOR_SPECIFIC_HEADSET_EVENT -> {

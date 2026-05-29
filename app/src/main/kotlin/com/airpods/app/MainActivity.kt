@@ -76,7 +76,8 @@ class MainActivity : ComponentActivity() {
                         ThemePrefs.set(this, next)
                     },
                     onShareLogs = ::exportLogs,
-                    onCheckUpdate = ::checkUpdate
+                    onCheckUpdate = ::checkUpdate,
+                    onRequestOverlay = ::requestOverlayPermission
                 )
 
                 val info = update
@@ -140,6 +141,20 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             Updater.downloadAndInstall(this@MainActivity)
         }
+    }
+
+    private fun requestOverlayPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        if (android.provider.Settings.canDrawOverlays(this)) {
+            Toast.makeText(this, "Ya está activo", Toast.LENGTH_SHORT).show()
+            return
+        }
+        AppLogger.i("MainActivity", "requesting overlay permission")
+        val intent = android.content.Intent(
+            android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            android.net.Uri.parse("package:$packageName")
+        )
+        runCatching { startActivity(intent) }
     }
 
     private fun checkPermissions(): Boolean =

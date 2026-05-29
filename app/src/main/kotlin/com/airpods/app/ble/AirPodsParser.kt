@@ -51,9 +51,12 @@ object AirPodsParser {
         val rightCharging = if (flip) leftChargingFlag else rightChargingFlag
 
         val lid = bytes[8].toInt() and 0xFF
-        // The lid counter increments on every open/close. Odd = open, even = closed.
-        // When the lid is closed the buds are *in* the case.
-        val inCase = (lid and 0x01) == 0
+        // byte 8 is a lid-event counter that increments on open/close, but in
+        // recent firmware its parity is not a reliable "lid currently closed"
+        // signal — odd/even flips many times per session while the lid stays
+        // open. Use the charging flags as a proxy instead: pods only charge
+        // while seated in the case.
+        val inCase = leftCharging && rightCharging
 
         return AirPodsSnapshot(
             model = model,

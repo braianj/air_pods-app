@@ -37,6 +37,7 @@ class AirPodsBleService : LifecycleService() {
     private var watchdogJob: Job? = null
     private var audioMonitor: ConnectedAirPodsMonitor? = null
     private var aapClient: AirPodsAapClient? = null
+    private var overlay: AirPodsOverlay? = null
 
     private var lastSnapshotAt: Long = 0L
     private var retryBackoffMs: Long = INITIAL_BACKOFF_MS
@@ -107,6 +108,8 @@ class AirPodsBleService : LifecycleService() {
     }
 
     private fun startAudioMonitor() {
+        if (overlay == null) overlay = AirPodsOverlay(applicationContext)
+
         audioMonitor?.stop()
         audioMonitor = ConnectedAirPodsMonitor(this).also { it.start(lifecycleScope) }
 
@@ -260,6 +263,10 @@ class AirPodsBleService : LifecycleService() {
                 lastSnapshotAt = System.currentTimeMillis()
                 retryBackoffMs = INITIAL_BACKOFF_MS
                 snapshotsSeen++
+                // Pop the iOS-style overlay over whatever the user is doing.
+                // The overlay reuses its existing view if already shown, so
+                // consecutive packets just refresh the values silently.
+                overlay?.show(snapshot)
                 // Log the parsed result together with the raw bytes, but only
                 // when the parsed values change — this is what lets us verify
                 // the byte→pod mapping against a real packet.
@@ -356,6 +363,8 @@ class AirPodsBleService : LifecycleService() {
         audioMonitor = null
         aapClient?.stop()
         aapClient = null
+        overlay?.hide()
+        overlay = null
         BluetoothBroadcastReceiver.unregister(this)
         scanCallback?.let { cb ->
             runCatching { scanner?.stopScan(cb) }

@@ -26,6 +26,9 @@
     <!-- Required to launch the system installer with a downloaded APK -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- Show the iOS-style battery popup over other apps when the case lid opens -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <uses-feature
         android:name="android.hardware.bluetooth_le"
         android:required="true" />

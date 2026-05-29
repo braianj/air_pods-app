@@ -43,6 +43,13 @@ class AirPodsOverlay(private val context: Context) {
             AppLogger.d(TAG, "no SYSTEM_ALERT_WINDOW permission — skipping overlay")
             return false
         }
+        // Don't surface the popup in landscape — the layout was designed for
+        // portrait and stretches awkwardly across the wider edge.
+        val orientation = context.resources.configuration.orientation
+        if (orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
+            AppLogger.d(TAG, "landscape orientation — skipping overlay")
+            return false
+        }
         if (System.currentTimeMillis() < snoozedUntil) {
             AppLogger.d(TAG, "overlay snoozed by user — skipping")
             return true

@@ -46,10 +46,13 @@ class AirPodsBleService : LifecycleService() {
     private val screenReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(ctx: android.content.Context?, intent: android.content.Intent?) {
             when (intent?.action) {
-                android.content.Intent.ACTION_SCREEN_ON,
-                android.content.Intent.ACTION_SCREEN_OFF -> {
-                    AppLogger.i(TAG, "screen ${intent.action?.removePrefix("android.intent.action.ACTION_")}")
+                android.content.Intent.ACTION_SCREEN_ON -> {
+                    AppLogger.i(TAG, "screen ON — resuming scan")
                     restartScanIfNeeded()
+                }
+                android.content.Intent.ACTION_SCREEN_OFF -> {
+                    AppLogger.i(TAG, "screen OFF — pausing scan (saves battery)")
+                    pauseScanForScreenOff()
                 }
             }
         }
@@ -277,12 +280,32 @@ class AirPodsBleService : LifecycleService() {
     }
 
     /**
+     * Stop the BLE scan entirely while the user isn't looking. OpenPods does
+     * the same — the radio cost of LOW_LATENCY or even BALANCED while screen
+     * off is far bigger than missing a lid-open event during that window.
+     * The last good snapshot stays in memory + the persistent notification,
+     * and a fresh scan resumes on screen-on within milliseconds.
+     */
+    @SuppressLint("MissingPermission")
+    private fun pauseScanForScreenOff() {
+        scanCallback?.let { cb ->
+            runCatching { scanner?.stopScan(cb) }
+        }
+        scanCallback = null
+        currentScanMode = -1
+    }
+
+    /**
      * Re-arm the scan if either the screen state or the bond state changed
      * what we should be doing. Cheap no-op when nothing actually changed.
+     * Returns immediately without starting if the screen is OFF — the
+     * screen receiver will resume on next ACTION_SCREEN_ON.
      */
     @SuppressLint("MissingPermission")
     private fun restartScanIfNeeded() {
         val wantBond = findBondedAirPods() != null
+        val pm = getSystemService(POWER_SERVICE) as? android.os.PowerManager
+        val screenOn = pm?.isInteractive ?: true
         val wantMode = chooseScanMode()
         val nowScanning = scanCallback != null
 
@@ -294,9 +317,13 @@ class AirPodsBleService : LifecycleService() {
                 currentScanMode = -1
                 AirPodsRepository.setStatus(ConnectionStatus.Idle)
             }
-            wantBond && !nowScanning -> {
-                AppLogger.i(TAG, "bonded AirPods present — starting scan")
+            wantBond && !nowScanning && screenOn -> {
+                AppLogger.i(TAG, "bonded AirPods + screen on — starting scan")
                 startScanning()
+            }
+            wantBond && !nowScanning && !screenOn -> {
+                AppLogger.d(TAG, "bonded AirPods but screen off — staying paused")
+                // Will resume on next ACTION_SCREEN_ON.
             }
             wantBond && nowScanning && wantMode != currentScanMode -> {
                 AppLogger.i(
@@ -338,6 +365,16 @@ class AirPodsBleService : LifecycleService() {
             AppLogger.i(TAG, "no bonded AirPods — skipping scan (will resume on bond)")
             currentScanMode = -1
             AirPodsRepository.setStatus(ConnectionStatus.Idle)
+            return
+        }
+
+        // Don't scan while the screen is off — the BLE radio is the single
+        // biggest contributor to drain, and a lid-open we'd miss now will
+        // be re-captured the moment the user lights up the phone.
+        val pm = getSystemService(POWER_SERVICE) as? android.os.PowerManager
+        if (pm?.isInteractive == false) {
+            AppLogger.d(TAG, "screen off — deferring scan until screen on")
+            currentScanMode = -1
             return
         }
 

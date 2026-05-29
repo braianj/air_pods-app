@@ -8,6 +8,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
@@ -23,7 +24,11 @@ class AirPodsOverlay(private val context: Context) {
 
     companion object {
         private const val TAG = "Overlay"
-        private const val SHOW_MS = 5_000L
+        private const val SHOW_MS = 4_000L
+        // After the user dismisses (tap or swipe), suppress all show() calls
+        // for this long. Prevents the popup from re-firing on the next
+        // fresh-open within a short window.
+        private const val SNOOZE_MS = 30_000L
     }
 
     private val wm: WindowManager =
@@ -31,11 +36,16 @@ class AirPodsOverlay(private val context: Context) {
     private val main = Handler(Looper.getMainLooper())
     private var current: View? = null
     private val dismiss = Runnable { hide() }
+    private var snoozedUntil: Long = 0L
 
     fun show(snapshot: AirPodsSnapshot): Boolean {
         if (!canDraw()) {
             AppLogger.d(TAG, "no SYSTEM_ALERT_WINDOW permission — skipping overlay")
             return false
+        }
+        if (System.currentTimeMillis() < snoozedUntil) {
+            AppLogger.d(TAG, "overlay snoozed by user — skipping")
+            return true
         }
         main.post {
             val existing = current
@@ -44,6 +54,7 @@ class AirPodsOverlay(private val context: Context) {
             )
 
             bind(view, snapshot)
+            attachDismissHandlers(view)
 
             if (existing == null) {
                 val widthPx = (context.resources.displayMetrics.widthPixels * 0.86f).toInt()
@@ -63,7 +74,10 @@ class AirPodsOverlay(private val context: Context) {
                 runCatching { wm.addView(view, params) }
                     .onFailure { AppLogger.w(TAG, "addView failed: ${it.message}") }
                 current = view
-                AppLogger.i(TAG, "overlay shown L=${snapshot.leftPct} R=${snapshot.rightPct} case=${snapshot.casePct}")
+                AppLogger.i(
+                    TAG,
+                    "overlay shown L=${snapshot.leftPct} R=${snapshot.rightPct} case=${snapshot.casePct}"
+                )
             }
 
             main.removeCallbacks(dismiss)
@@ -77,6 +91,41 @@ class AirPodsOverlay(private val context: Context) {
             val view = current ?: return@post
             current = null
             runCatching { wm.removeView(view) }
+        }
+    }
+
+    /** Hide + snooze; called when the user taps or swipes-up on the overlay. */
+    private fun userDismissed() {
+        snoozedUntil = System.currentTimeMillis() + SNOOZE_MS
+        AppLogger.i(TAG, "user dismissed overlay, snoozed until +${SNOOZE_MS / 1000}s")
+        hide()
+    }
+
+    private fun attachDismissHandlers(view: View) {
+        // Tap to dismiss.
+        view.setOnClickListener { userDismissed() }
+        // Swipe-up to dismiss: simple Y-delta check on touch.
+        val touchSlopDp = 24f
+        val slopPx = touchSlopDp * context.resources.displayMetrics.density
+        var startY = 0f
+        view.setOnTouchListener { v, ev ->
+            when (ev.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    startY = ev.rawY
+                    false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (startY - ev.rawY > slopPx) {
+                        userDismissed()
+                        true
+                    } else false
+                }
+                else -> false
+            }
+        }
+        // Close icon (an X TextView in the layout).
+        view.findViewById<TextView>(R.id.overlay_close)?.setOnClickListener {
+            userDismissed()
         }
     }
 

@@ -22,7 +22,8 @@ import com.airpods.app.notification.BatteryNotificationManager
 import com.airpods.app.util.AppLogger
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 class AirPodsBleService : LifecycleService() {
@@ -582,11 +583,31 @@ class AirPodsBleService : LifecycleService() {
     private fun observeStateForNotification() {
         notificationJob?.cancel()
         notificationJob = lifecycleScope.launch {
-            AirPodsRepository.state.collectLatest { state ->
-                BatteryNotificationManager.update(this@AirPodsBleService, state)
-            }
+            AirPodsRepository.state
+                // Only re-render the notification when something the user
+                // actually sees changes. Snapshot timestamps tick on every
+                // packet but the displayed battery digits stay the same
+                // most of the time; rebuilding the RemoteViews + drawing
+                // the status-bar bitmap on every tick was wasted work.
+                .map { st ->
+                    Quad(
+                        st.status.javaClass to (st.status as? ConnectionStatus.AudioConnected)?.deviceName,
+                        st.snapshot?.leftPct to st.snapshot?.leftCharging,
+                        st.snapshot?.rightPct to st.snapshot?.rightCharging,
+                        st.snapshot?.casePct to st.snapshot?.caseCharging
+                    )
+                }
+                .distinctUntilChanged()
+                .collect {
+                    BatteryNotificationManager.update(
+                        this@AirPodsBleService,
+                        AirPodsRepository.state.value
+                    )
+                }
         }
     }
+
+    private data class Quad<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)
 
     private fun startWatchdog() {
         watchdogJob?.cancel()

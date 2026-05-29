@@ -255,9 +255,25 @@ class AirPodsBleService : LifecycleService() {
     }
 
     /**
-     * Pick the scan mode based on screen state + the user's power-save
-     * preference. When power-save is enabled we stay in BALANCED regardless;
-     * otherwise we use LOW_LATENCY only while the screen is interactive.
+     * Pick the scan mode based on screen state, foreground state, and the
+     * user's power-save preference. The energy hierarchy from most to
+     * least:
+     *
+     *  LOW_LATENCY    — only while the user is actively in the dashboard
+     *                    (or in the foreground for the brief moments after
+     *                    a connect). Snappy popup, full radio duty cycle.
+     *  BALANCED       — power-save toggle is on. ~half the duty cycle of
+     *                    LOW_LATENCY but still actively scanning.
+     *  OPPORTUNISTIC  — default for screen-on background. Costs near-zero
+     *                    radio energy because it piggybacks on whatever
+     *                    other app already has a scan running (Play
+     *                    Services, Find My Device, etc.) instead of
+     *                    spinning up the radio itself. AirGuard, bitchat
+     *                    and other battery-conscious apps use this for the
+     *                    same reason.
+     *
+     * Screen-off doesn't reach here — the screenReceiver stops the scan
+     * entirely on ACTION_SCREEN_OFF.
      */
     private fun chooseScanMode(): Int {
         val prefs = applicationContext.getSharedPreferences(
@@ -266,9 +282,15 @@ class AirPodsBleService : LifecycleService() {
         if (prefs.getBoolean(KEY_POWER_SAVE, false)) {
             return ScanSettings.SCAN_MODE_BALANCED
         }
-        val pm = getSystemService(POWER_SERVICE) as? android.os.PowerManager
-        val on = pm?.isInteractive ?: true
-        return if (on) ScanSettings.SCAN_MODE_LOW_LATENCY else ScanSettings.SCAN_MODE_BALANCED
+        return if (com.airpods.app.MainActivity.isForeground) {
+            ScanSettings.SCAN_MODE_LOW_LATENCY
+        } else {
+            // Screen on but our app isn't the one being looked at: the
+            // user doesn't need an instant popup, and there are usually
+            // other scanners running on the device (Play Services nearby,
+            // Find My Device, fitness apps...). Piggyback on those instead.
+            ScanSettings.SCAN_MODE_OPPORTUNISTIC
+        }
     }
 
     private fun scanModeName(mode: Int): String = when (mode) {

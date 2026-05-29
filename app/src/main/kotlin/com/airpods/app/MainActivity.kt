@@ -147,11 +147,17 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         isForeground = true
+        // Kick the service so it re-evaluates scan mode now that the user
+        // is actively in the dashboard — bumps from OPPORTUNISTIC up to
+        // LOW_LATENCY for snappy popup behaviour while they're looking.
+        com.airpods.app.ble.AirPodsBleService.refresh(applicationContext)
     }
 
     override fun onPause() {
         super.onPause()
         isForeground = false
+        // Drop back to OPPORTUNISTIC — they're not looking anymore.
+        com.airpods.app.ble.AirPodsBleService.refresh(applicationContext)
     }
 
     private fun checkUpdate() {

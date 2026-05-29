@@ -30,8 +30,9 @@
 
             <ImageView
                 android:id="@+id/notif_left_icon"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:tint="?android:attr/textColorPrimary"
                 android:src="@drawable/ic_airpod_left"
                 android:contentDescription="@string/bud_left" />
 
@@ -68,8 +69,9 @@
 
             <ImageView
                 android:id="@+id/notif_right_icon"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:tint="?android:attr/textColorPrimary"
                 android:src="@drawable/ic_airpod_right"
                 android:contentDescription="@string/bud_right" />
 
@@ -106,8 +108,9 @@
 
             <ImageView
                 android:id="@+id/notif_case_icon"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:tint="?android:attr/textColorPrimary"
                 android:src="@drawable/ic_case"
                 android:contentDescription="@string/case_title" />
 

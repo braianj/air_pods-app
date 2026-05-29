@@ -4,8 +4,9 @@
     android:viewportWidth="24"
     android:viewportHeight="24"
     android:tint="?android:attr/colorControlNormal">
-    <!-- Left AirPod Pro silhouette: rounded earbud at top, stem going down. -->
+    <!-- Single AirPod Pro silhouette: rounded earbud + stem.
+         Solid filled shape so it reads clearly in small notification sizes. -->
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M9.5,2 C6.46,2 4,4.46 4,7.5 C4,9.58 5.16,11.39 6.86,12.32 L8,12.94 L8,20 C8,21.1 8.9,22 10,22 L10,22 C11.1,22 12,21.1 12,20 L12,12.94 L13.14,12.32 C14.84,11.39 16,9.58 16,7.5 C16,4.46 13.54,2 10.5,2 Z" />
+        android:pathData="M11,2 C8.24,2 6,4.24 6,7 C6,8.86 7.02,10.49 8.5,11.36 L8.5,21 C8.5,21.55 8.95,22 9.5,22 L12.5,22 C13.05,22 13.5,21.55 13.5,21 L13.5,11.36 C14.98,10.49 16,8.86 16,7 C16,4.24 13.76,2 11,2 Z" />
 </vector>

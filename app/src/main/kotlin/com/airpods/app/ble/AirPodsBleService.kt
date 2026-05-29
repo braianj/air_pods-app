@@ -315,8 +315,13 @@ class AirPodsBleService : LifecycleService() {
                 // packets we just update the underlying repository state
                 // silently — no overlay re-appearance, no heads-up re-fire.
                 if (freshOpen) {
-                    overlay?.show(snapshot)
-                    BatteryNotificationManager.showPopup(applicationContext, snapshot)
+                    // Prefer the overlay if the user granted SYSTEM_ALERT_WINDOW
+                    // (looks better — sits over the actual app). Otherwise
+                    // fall back to a heads-up notification, never both.
+                    val overlayShown = overlay?.show(snapshot) == true
+                    if (!overlayShown) {
+                        BatteryNotificationManager.showPopup(applicationContext, snapshot)
+                    }
                 }
                 // Log the parsed result together with the raw bytes, but only
                 // when the parsed values change — this is what lets us verify

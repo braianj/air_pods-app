@@ -32,10 +32,10 @@ class AirPodsOverlay(private val context: Context) {
     private var current: View? = null
     private val dismiss = Runnable { hide() }
 
-    fun show(snapshot: AirPodsSnapshot) {
+    fun show(snapshot: AirPodsSnapshot): Boolean {
         if (!canDraw()) {
             AppLogger.d(TAG, "no SYSTEM_ALERT_WINDOW permission — skipping overlay")
-            return
+            return false
         }
         main.post {
             val existing = current
@@ -68,6 +68,7 @@ class AirPodsOverlay(private val context: Context) {
             main.removeCallbacks(dismiss)
             main.postDelayed(dismiss, SHOW_MS)
         }
+        return true
     }
 
     fun hide() {

@@ -65,6 +65,8 @@
     <string name="info_loading">Loading…</string>
     <string name="info_no_commits">Couldn\'t load commits.</string>
     <string name="settings_overlay_subtitle">Show battery over any app when the case opens</string>
+    <string name="settings_power_save_title">Battery saver mode</string>
+    <string name="settings_power_save_subtitle">Always scan in BALANCED (1-2s slower lid-open popup, ~50% less power)</string>
     <string name="settings_save_logs_subtitle">Export the full log to Downloads</string>
     <string name="settings_view_logs_subtitle">Read the log in-app without exporting</string>
     <string name="settings_clear_cache_subtitle">Clear the last persisted battery snapshot</string>

@@ -65,6 +65,8 @@
     <string name="info_loading">Cargando…</string>
     <string name="info_no_commits">No se pudieron cargar los commits.</string>
     <string name="settings_overlay_subtitle">Mostrar la batería sobre cualquier app cuando se abre la tapa</string>
+    <string name="settings_power_save_title">Modo ahorro de batería</string>
+    <string name="settings_power_save_subtitle">Scan en BALANCED siempre (1-2s más lento al abrir la tapa, ~50% menos consumo)</string>
     <string name="settings_save_logs_subtitle">Exportar el log completo a Descargas</string>
     <string name="settings_view_logs_subtitle">Ver el log en pantalla sin exportarlo</string>
     <string name="settings_clear_cache_subtitle">Borrar la última batería guardada</string>

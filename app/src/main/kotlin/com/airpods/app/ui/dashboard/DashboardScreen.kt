@@ -770,6 +770,7 @@ private fun SettingsTab(
             ),
             onClick = onCycleTheme
         )
+        PowerSaveToggleRow()
         SettingRow(
             iconRes = R.drawable.ic_airpods,
             title = stringResource(R.string.action_grant_overlay),
@@ -795,6 +796,65 @@ private fun SettingsTab(
             onClick = onClearCache
         )
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+@Composable
+private fun PowerSaveToggleRow() {
+    val ctx = LocalContext.current
+    val prefs = remember {
+        ctx.getSharedPreferences(
+            com.airpods.app.ble.BootReceiver.PREFS,
+            android.content.Context.MODE_PRIVATE
+        )
+    }
+    var enabled by remember {
+        mutableStateOf(prefs.getBoolean(com.airpods.app.ble.AirPodsBleService.KEY_POWER_SAVE, false))
+    }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = RoundedCornerShape(16.dp),
+        onClick = {
+            enabled = !enabled
+            prefs.edit().putBoolean(com.airpods.app.ble.AirPodsBleService.KEY_POWER_SAVE, enabled).apply()
+            com.airpods.app.ble.AirPodsBleService.refresh(ctx.applicationContext)
+        }
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_bolt),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+                tint = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.settings_power_save_title),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = stringResource(R.string.settings_power_save_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            androidx.compose.material3.Switch(
+                checked = enabled,
+                onCheckedChange = {
+                    enabled = it
+                    prefs.edit().putBoolean(com.airpods.app.ble.AirPodsBleService.KEY_POWER_SAVE, it).apply()
+                    com.airpods.app.ble.AirPodsBleService.refresh(ctx.applicationContext)
+                }
+            )
+        }
     }
 }
 

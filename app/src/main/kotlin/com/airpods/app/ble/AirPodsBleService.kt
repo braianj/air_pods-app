@@ -63,6 +63,13 @@ class AirPodsBleService : LifecycleService() {
     // Dedup so the per-packet log isn't flooded by identical adverts (the
     // scanner repeats the same advertisement hundreds of times per second).
     private var lastLogged07Hex: String? = null
+
+    // Bytes of the previous packet that made it past the dedup gate, so we
+    // can short-circuit identical re-broadcasts without invoking the parser.
+    // AirPods repeat the same advertisement many times in succession; this
+    // alone cuts the per-callback CPU work by a large factor.
+    private var lastSeenMfgBytes: ByteArray? = null
+    private var dedupedCount: Int = 0
     private var lastLoggedParseLine: String? = null
 
     // Once we've seen a snapshot with strong RSSI (≥ STRONG_RSSI_DBM), lock
@@ -169,14 +176,17 @@ class AirPodsBleService : LifecycleService() {
         statsJob?.cancel()
         statsJob = lifecycleScope.launch {
             while (true) {
-                delay(10_000)
+                delay(30_000)
                 val snapshot = synchronized(subtypeCounts) {
                     if (subtypeCounts.isEmpty()) "(no Apple packets received yet)"
                     else subtypeCounts.entries
                         .sortedByDescending { it.value }
                         .joinToString(", ") { (k, v) -> "0x%02X=%d".format(k, v) }
                 }
-                AppLogger.i(TAG, "stats(10s): apple_subtypes=[$snapshot] snapshots=$snapshotsSeen")
+                AppLogger.i(
+                    TAG,
+                    "stats(30s): apple_subtypes=[$snapshot] snapshots=$snapshotsSeen deduped=$dedupedCount"
+                )
             }
         }
     }
@@ -237,12 +247,17 @@ class AirPodsBleService : LifecycleService() {
     }
 
     /**
-     * Pick the scan mode based on screen state. LOW_LATENCY only when the
-     * user is likely to look at the popup right away (screen on) — when the
-     * screen is off the BALANCED mode cuts roughly half the radio energy
-     * and still catches lid-open broadcasts within ~1-2s.
+     * Pick the scan mode based on screen state + the user's power-save
+     * preference. When power-save is enabled we stay in BALANCED regardless;
+     * otherwise we use LOW_LATENCY only while the screen is interactive.
      */
     private fun chooseScanMode(): Int {
+        val prefs = applicationContext.getSharedPreferences(
+            BootReceiver.PREFS, Context.MODE_PRIVATE
+        )
+        if (prefs.getBoolean(KEY_POWER_SAVE, false)) {
+            return ScanSettings.SCAN_MODE_BALANCED
+        }
         val pm = getSystemService(POWER_SERVICE) as? android.os.PowerManager
         val on = pm?.isInteractive ?: true
         return if (on) ScanSettings.SCAN_MODE_LOW_LATENCY else ScanSettings.SCAN_MODE_BALANCED
@@ -356,6 +371,19 @@ class AirPodsBleService : LifecycleService() {
                     AppLogger.d(TAG, "Apple hit but empty mfg data (rssi=${result.rssi})")
                     return
                 }
+                // Dedup against the previous packet's bytes. AirPods repeat
+                // the same advertisement many times in a burst; running the
+                // parser + filter + repository update on each identical copy
+                // is wasted CPU. RSSI varies a bit between repeats, so we
+                // accept the loss of those minor RSSI samples — the proximity
+                // calculator already smooths.
+                val prev = lastSeenMfgBytes
+                if (prev != null && prev.contentEquals(mfg)) {
+                    dedupedCount++
+                    return
+                }
+                lastSeenMfgBytes = mfg
+
                 val subtype = mfg[0].toInt() and 0xFF
                 val length = if (mfg.size > 1) mfg[1].toInt() and 0xFF else -1
                 synchronized(subtypeCounts) {
@@ -576,6 +604,9 @@ class AirPodsBleService : LifecycleService() {
         const val ACTION_START = "com.airpods.app.action.START"
         const val ACTION_STOP = "com.airpods.app.action.STOP"
         const val ACTION_REFRESH = "com.airpods.app.action.REFRESH"
+
+        /** Preference key for the user's "power save" toggle. */
+        const val KEY_POWER_SAVE = "power_save"
 
         /** Tell a running service to recheck bond state and scan mode. */
         fun refresh(context: Context) {

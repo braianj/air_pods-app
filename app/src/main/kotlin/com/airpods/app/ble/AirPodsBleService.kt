@@ -70,6 +70,9 @@ class AirPodsBleService : LifecycleService() {
     // alone cuts the per-callback CPU work by a large factor.
     private var lastSeenMfgBytes: ByteArray? = null
     private var dedupedCount: Int = 0
+    // Counters for noisy decisions that used to be debug-logged per packet.
+    private var rssiRejectsCount: Int = 0
+    private var foreignModelRejectsCount: Int = 0
     private var lastLoggedParseLine: String? = null
 
     // Once we've seen a snapshot with strong RSSI (≥ STRONG_RSSI_DBM), lock
@@ -185,7 +188,9 @@ class AirPodsBleService : LifecycleService() {
                 }
                 AppLogger.i(
                     TAG,
-                    "stats(30s): apple_subtypes=[$snapshot] snapshots=$snapshotsSeen deduped=$dedupedCount"
+                    "stats(30s): apple_subtypes=[$snapshot] snapshots=$snapshotsSeen " +
+                        "deduped=$dedupedCount rssiRejects=$rssiRejectsCount " +
+                        "foreignRejects=$foreignModelRejectsCount"
                 )
             }
         }
@@ -336,17 +341,18 @@ class AirPodsBleService : LifecycleService() {
             return
         }
 
-        // Loose filter: accept ANY Apple manufacturer data, not just the
-        // proximity-pairing subtype. AirPods only broadcast 0x07/0x19 for
-        // ~30 s after the case lid opens; the rest of the time they emit
-        // other Continuity subtypes (Nearby 0x10, Handoff, AirDrop, etc.).
-        // The parser later filters by subtype + length, and we log every
-        // subtype we see so we can diagnose what's actually nearby.
+        // Tight filter at the BT-controller firmware level: only deliver
+        // Continuity proximity-pairing packets with subtype 0x07 + length
+        // 0x19 — the unencrypted format that carries battery. Everything
+        // else (Nearby 0x10, Handoff 0x0C, FindMy 0x12, the encrypted
+        // 0x07 0x11 variant, etc.) gets filtered in the BT chip without
+        // ever reaching this callback. Cuts ~95% of work in environments
+        // with many nearby Apple devices.
         val filter = ScanFilter.Builder()
             .setManufacturerData(
                 AirPodsParser.APPLE_MANUFACTURER_ID,
-                byteArrayOf(),
-                byteArrayOf()
+                byteArrayOf(0x07, 0x19),
+                byteArrayOf(0xFF.toByte(), 0xFF.toByte())
             )
             .build()
 
@@ -408,15 +414,15 @@ class AirPodsBleService : LifecycleService() {
                 val snapshot = AirPodsParser.parse(mfg, result.rssi)
                 if (snapshot == null) return
 
-                // Reject far-away AirPods from neighbors. The user's own pods
-                // are typically -30 to -65 dBm; anything weaker is somebody
-                // else's, and parsing it would flip the UI between unrelated
-                // devices. (OpenPods uses the same -60 threshold.)
+                // Reject far-away AirPods from neighbors silently. The user's
+                // own pods are typically -30 to -55 dBm; anything weaker is
+                // somebody else's. (OpenPods uses the same threshold.) We
+                // used to debug-log every reject, but in environments with
+                // multiple neighbors that's thousands of disk writes per
+                // minute. Track rejections in a counter instead and only
+                // log periodically via the stats job.
                 if (result.rssi < MIN_RSSI_DBM) {
-                    AppLogger.d(
-                        TAG,
-                        "ignoring far AirPods rssi=${result.rssi} model=${snapshot.model}"
-                    )
+                    rssiRejectsCount++
                     return
                 }
 
@@ -430,10 +436,7 @@ class AirPodsBleService : LifecycleService() {
                         AppLogger.i(TAG, "locked model=${snapshot.model} (rssi=${result.rssi})")
                     }
                 } else if (snapshot.model != locked) {
-                    AppLogger.d(
-                        TAG,
-                        "ignoring foreign model ${snapshot.model} (locked=$locked) rssi=${result.rssi}"
-                    )
+                    foreignModelRejectsCount++
                     return
                 }
 

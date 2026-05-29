@@ -291,11 +291,9 @@ class ConnectedAirPodsMonitor(private val context: Context) {
         val raw = method.invoke(device, key) as? ByteArray
         raw?.let { String(it, Charsets.UTF_8).trim().toIntOrNull() }
     } catch (t: Throwable) {
-        val real = (t as? java.lang.reflect.InvocationTargetException)?.targetException ?: t
-        AppLogger.d(
-            TAG,
-            "getMetadata($key) blocked: ${real.javaClass.simpleName}: ${real.message ?: "(no msg)"}"
-        )
+        // getMetadata is BLUETOOTH_PRIVILEGED on Android 12+ and unreachable
+        // from this app — failure is the steady state. We confirmed this
+        // long ago; don't log per-call.
         null
     }
 

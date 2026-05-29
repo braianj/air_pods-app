@@ -39,6 +39,22 @@ class AirPodsBleService : LifecycleService() {
     private var aapClient: AirPodsAapClient? = null
     private var overlay: AirPodsOverlay? = null
 
+    // Track the scan mode we're currently running with so we don't pointlessly
+    // tear down and re-arm the scan when nothing changed.
+    private var currentScanMode: Int = -1
+    private var screenReceiverRegistered: Boolean = false
+    private val screenReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(ctx: android.content.Context?, intent: android.content.Intent?) {
+            when (intent?.action) {
+                android.content.Intent.ACTION_SCREEN_ON,
+                android.content.Intent.ACTION_SCREEN_OFF -> {
+                    AppLogger.i(TAG, "screen ${intent.action?.removePrefix("android.intent.action.ACTION_")}")
+                    restartScanIfNeeded()
+                }
+            }
+        }
+    }
+
     private var lastSnapshotAt: Long = 0L
     private var retryBackoffMs: Long = INITIAL_BACKOFF_MS
     private var lastLoggedModel: AirPodsModel? = null
@@ -81,6 +97,11 @@ class AirPodsBleService : LifecycleService() {
                 stopSelf()
                 return START_NOT_STICKY
             }
+            ACTION_REFRESH -> {
+                AppLogger.i(TAG, "refresh requested (bond change)")
+                restartScanIfNeeded()
+                return START_STICKY
+            }
         }
 
         val notif = BatteryNotificationManager.buildPlaceholder(this)
@@ -104,6 +125,7 @@ class AirPodsBleService : LifecycleService() {
             return START_STICKY
         }
 
+        registerScreenReceiver()
         startScanning()
         observeStateForNotification()
         startWatchdog()
@@ -198,6 +220,76 @@ class AirPodsBleService : LifecycleService() {
         return mgr?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
     }
 
+    private fun registerScreenReceiver() {
+        if (screenReceiverRegistered) return
+        val filter = android.content.IntentFilter().apply {
+            addAction(android.content.Intent.ACTION_SCREEN_ON)
+            addAction(android.content.Intent.ACTION_SCREEN_OFF)
+        }
+        runCatching { registerReceiver(screenReceiver, filter) }
+        screenReceiverRegistered = true
+    }
+
+    private fun unregisterScreenReceiver() {
+        if (!screenReceiverRegistered) return
+        runCatching { unregisterReceiver(screenReceiver) }
+        screenReceiverRegistered = false
+    }
+
+    /**
+     * Pick the scan mode based on screen state. LOW_LATENCY only when the
+     * user is likely to look at the popup right away (screen on) — when the
+     * screen is off the BALANCED mode cuts roughly half the radio energy
+     * and still catches lid-open broadcasts within ~1-2s.
+     */
+    private fun chooseScanMode(): Int {
+        val pm = getSystemService(POWER_SERVICE) as? android.os.PowerManager
+        val on = pm?.isInteractive ?: true
+        return if (on) ScanSettings.SCAN_MODE_LOW_LATENCY else ScanSettings.SCAN_MODE_BALANCED
+    }
+
+    private fun scanModeName(mode: Int): String = when (mode) {
+        ScanSettings.SCAN_MODE_LOW_LATENCY -> "LOW_LATENCY"
+        ScanSettings.SCAN_MODE_BALANCED -> "BALANCED"
+        ScanSettings.SCAN_MODE_LOW_POWER -> "LOW_POWER"
+        ScanSettings.SCAN_MODE_OPPORTUNISTIC -> "OPPORTUNISTIC"
+        else -> "?$mode"
+    }
+
+    /**
+     * Re-arm the scan if either the screen state or the bond state changed
+     * what we should be doing. Cheap no-op when nothing actually changed.
+     */
+    @SuppressLint("MissingPermission")
+    private fun restartScanIfNeeded() {
+        val wantBond = findBondedAirPods() != null
+        val wantMode = chooseScanMode()
+        val nowScanning = scanCallback != null
+
+        when {
+            !wantBond && nowScanning -> {
+                AppLogger.i(TAG, "no bonded AirPods anymore — pausing scan")
+                scanCallback?.let { cb -> runCatching { scanner?.stopScan(cb) } }
+                scanCallback = null
+                currentScanMode = -1
+                AirPodsRepository.setStatus(ConnectionStatus.Idle)
+            }
+            wantBond && !nowScanning -> {
+                AppLogger.i(TAG, "bonded AirPods present — starting scan")
+                startScanning()
+            }
+            wantBond && nowScanning && wantMode != currentScanMode -> {
+                AppLogger.i(
+                    TAG,
+                    "scan mode switch ${scanModeName(currentScanMode)} -> ${scanModeName(wantMode)}"
+                )
+                scanCallback?.let { cb -> runCatching { scanner?.stopScan(cb) } }
+                scanCallback = null
+                startScanning()
+            }
+        }
+    }
+
     private fun startForegroundCompat(notif: android.app.Notification) {
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
@@ -219,6 +311,16 @@ class AirPodsBleService : LifecycleService() {
         }
         scanner = s
 
+        if (findBondedAirPods() == null) {
+            // No bonded AirPods/Beats anywhere on this device — there's no
+            // point burning radio. Stay foreground, but skip the scan until
+            // a bond shows up (BluetoothBroadcastReceiver fires on bond).
+            AppLogger.i(TAG, "no bonded AirPods — skipping scan (will resume on bond)")
+            currentScanMode = -1
+            AirPodsRepository.setStatus(ConnectionStatus.Idle)
+            return
+        }
+
         // Loose filter: accept ANY Apple manufacturer data, not just the
         // proximity-pairing subtype. AirPods only broadcast 0x07/0x19 for
         // ~30 s after the case lid opens; the rest of the time they emit
@@ -233,13 +335,14 @@ class AirPodsBleService : LifecycleService() {
             )
             .build()
 
+        val mode = chooseScanMode()
         // Use batch-scan mode (reportDelay > 0). The Bluetooth controller
         // does the filtering at firmware level and delivers grouped results,
         // which on most Android devices is MORE reliable than the immediate-
         // callback mode for catching short bursts like the AirPods lid-open
         // proximity-pairing packet. OpenPods/MaterialPods use the same trick.
         val settings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .setScanMode(mode)
             .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
             .setReportDelay(1)
             .build()
@@ -359,7 +462,8 @@ class AirPodsBleService : LifecycleService() {
         scanCallback = callback
         try {
             s.startScan(listOf(filter), settings, callback)
-            AppLogger.i(TAG, "startScan ok, filter=Apple/0x07,0x19, mode=LOW_LATENCY")
+            currentScanMode = mode
+            AppLogger.i(TAG, "startScan ok, filter=Apple/0x07,0x19, mode=${scanModeName(mode)}")
             AirPodsRepository.setStatus(ConnectionStatus.Scanning)
         } catch (se: SecurityException) {
             AppLogger.w(TAG, "SecurityException starting scan", se)
@@ -434,6 +538,8 @@ class AirPodsBleService : LifecycleService() {
         overlay?.hide()
         overlay = null
         BluetoothBroadcastReceiver.unregister(this)
+        unregisterScreenReceiver()
+        currentScanMode = -1
         scanCallback?.let { cb ->
             runCatching { scanner?.stopScan(cb) }
         }
@@ -469,6 +575,14 @@ class AirPodsBleService : LifecycleService() {
 
         const val ACTION_START = "com.airpods.app.action.START"
         const val ACTION_STOP = "com.airpods.app.action.STOP"
+        const val ACTION_REFRESH = "com.airpods.app.action.REFRESH"
+
+        /** Tell a running service to recheck bond state and scan mode. */
+        fun refresh(context: Context) {
+            val intent = Intent(context, AirPodsBleService::class.java)
+                .setAction(ACTION_REFRESH)
+            runCatching { context.startService(intent) }
+        }
 
         private const val STALE_AFTER_MS = 30_000L
         private const val INITIAL_BACKOFF_MS = 1_000L

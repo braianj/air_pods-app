@@ -156,6 +156,14 @@ object BluetoothBroadcastReceiver : BroadcastReceiver() {
             BluetoothHeadset.ACTION_VENDOR_SPECIFIC_HEADSET_EVENT -> {
                 handleVendorEvent(intent, name)
             }
+            BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
+                // Bond state shifted — tell the running service to re-evaluate
+                // whether it should be scanning at all (saves energy when the
+                // user un-pairs their AirPods).
+                if (isAirPods(name)) {
+                    AirPodsBleService.refresh(context.applicationContext)
+                }
+            }
         }
     }
 

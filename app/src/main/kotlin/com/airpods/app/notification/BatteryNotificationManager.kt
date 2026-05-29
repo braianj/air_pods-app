@@ -22,23 +22,79 @@ import com.airpods.app.ble.ConnectionStatus
 object BatteryNotificationManager {
 
     const val CHANNEL_ID = "airpods_battery"
+    const val POPUP_CHANNEL_ID = "airpods_popup"
     const val NOTIF_ID = 4242
+    const val POPUP_NOTIF_ID = 4243
 
     fun ensureChannel(context: Context) {
         val nm = context.getSystemService<NotificationManager>() ?: return
-        if (nm.getNotificationChannel(CHANNEL_ID) != null) return
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            context.getString(R.string.notif_channel_name),
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = context.getString(R.string.notif_channel_description)
-            setShowBadge(false)
-            enableLights(false)
-            enableVibration(false)
+        if (nm.getNotificationChannel(CHANNEL_ID) == null) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                context.getString(R.string.notif_channel_name),
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = context.getString(R.string.notif_channel_description)
+                setShowBadge(false)
+                enableLights(false)
+                enableVibration(false)
+            }
+            nm.createNotificationChannel(channel)
         }
-        nm.createNotificationChannel(channel)
+        if (nm.getNotificationChannel(POPUP_CHANNEL_ID) == null) {
+            // Heads-up channel — pops at the top of the screen when the case
+            // opens, even if the SYSTEM_ALERT_WINDOW overlay isn't granted.
+            val popup = NotificationChannel(
+                POPUP_CHANNEL_ID,
+                context.getString(R.string.notif_popup_channel_name),
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = context.getString(R.string.notif_popup_channel_description)
+                setShowBadge(false)
+                enableVibration(false)
+                setSound(null, null)
+            }
+            nm.createNotificationChannel(popup)
+        }
     }
+
+    fun showPopup(context: Context, snapshot: com.airpods.app.ble.AirPodsSnapshot) {
+        val nm = context.getSystemService<NotificationManager>() ?: return
+        val content = RemoteViews(context.packageName, R.layout.notification_battery)
+        content.setTextViewText(R.id.notif_status, snapshot.model.displayName)
+        bindSlot(content, R.id.notif_left_icon, R.id.notif_left_pct, R.id.notif_left_charging,
+            snapshot.leftPct, snapshot.leftCharging)
+        bindSlot(content, R.id.notif_right_icon, R.id.notif_right_pct, R.id.notif_right_charging,
+            snapshot.rightPct, snapshot.rightCharging)
+        bindSlot(content, R.id.notif_case_icon, R.id.notif_case_pct, R.id.notif_case_charging,
+            snapshot.casePct, snapshot.caseCharging)
+
+        val openIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pi = PendingIntent.getActivity(
+            context, 1, openIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val notif = NotificationCompat.Builder(context, POPUP_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(snapshot.model.displayName)
+            .setContentText("L ${pct(snapshot.leftPct)} · ${pct(snapshot.casePct)} · R ${pct(snapshot.rightPct)}")
+            .setCustomContentView(content)
+            .setCustomBigContentView(content)
+            .setCustomHeadsUpContentView(content)
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setOnlyAlertOnce(false)
+            .setAutoCancel(true)
+            .setTimeoutAfter(6_000L)
+            .setContentIntent(pi)
+            .build()
+        nm.notify(POPUP_NOTIF_ID, notif)
+    }
+
+    private fun pct(p: Int?): String = if (p == null) "—" else "$p%"
 
     fun buildPlaceholder(context: Context): android.app.Notification {
         return baseBuilder(context, statusText(context, ConnectionStatus.Scanning))

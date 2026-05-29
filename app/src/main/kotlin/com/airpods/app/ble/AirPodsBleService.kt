@@ -260,13 +260,21 @@ class AirPodsBleService : LifecycleService() {
                     return
                 }
 
-                lastSnapshotAt = System.currentTimeMillis()
+                val now = System.currentTimeMillis()
+                val freshOpen = lastSnapshotAt == 0L || (now - lastSnapshotAt) > FRESH_OPEN_GAP_MS
+                lastSnapshotAt = now
                 retryBackoffMs = INITIAL_BACKOFF_MS
                 snapshotsSeen++
                 // Pop the iOS-style overlay over whatever the user is doing.
                 // The overlay reuses its existing view if already shown, so
                 // consecutive packets just refresh the values silently.
                 overlay?.show(snapshot)
+                // Fallback for users who haven't (or can't) grant the
+                // overlay permission: a high-priority heads-up notification
+                // that appears at the top of the screen on a fresh open.
+                if (freshOpen) {
+                    BatteryNotificationManager.showPopup(applicationContext, snapshot)
+                }
                 // Log the parsed result together with the raw bytes, but only
                 // when the parsed values change — this is what lets us verify
                 // the byte→pod mapping against a real packet.
@@ -408,6 +416,9 @@ class AirPodsBleService : LifecycleService() {
         private const val MIN_RSSI_DBM = -65
         // Strong-signal threshold to commit to a model id for the session.
         private const val STRONG_RSSI_DBM = -55
+        // After this much silence, a new snapshot counts as a "fresh" lid
+        // open event and we surface the heads-up popup notification.
+        private const val FRESH_OPEN_GAP_MS = 20_000L
 
         fun start(context: Context) {
             AppLogger.i(TAG, "Service.start() called")

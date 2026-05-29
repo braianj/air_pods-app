@@ -4,6 +4,8 @@
 
     <string name="notif_channel_name">AirPods battery</string>
     <string name="notif_channel_description">Persistent battery level for connected AirPods.</string>
+    <string name="notif_popup_channel_name">Case-open popup</string>
+    <string name="notif_popup_channel_description">Pops up at the top when a fresh AirPods battery reading lands.</string>
 
     <string name="status_idle">Idle</string>
     <string name="status_scanning">Searching for AirPods…</string>

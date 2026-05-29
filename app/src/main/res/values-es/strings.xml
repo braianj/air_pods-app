@@ -4,6 +4,8 @@
 
     <string name="notif_channel_name">Batería AirPods</string>
     <string name="notif_channel_description">Notificación persistente con el nivel de batería de los AirPods conectados.</string>
+    <string name="notif_popup_channel_name">Popup al abrir el estuche</string>
+    <string name="notif_popup_channel_description">Aparece en la parte superior cuando se detecta una nueva lectura de batería.</string>
 
     <string name="status_idle">En espera</string>
     <string name="status_scanning">Buscando AirPods…</string>

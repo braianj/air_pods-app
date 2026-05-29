@@ -4,14 +4,14 @@
     android:viewportWidth="24"
     android:viewportHeight="24"
     android:tint="?android:attr/textColorPrimary">
-    <!-- AirPods Pro silhouette. Two separate paths overlap at the neck to
-         form a single visual shape: small round earbud (top third) and a
-         long slender stem with rounded bottom (bottom two-thirds), like the
-         real Pro hardware viewed from the front. -->
+    <!-- Outlined AirPod Pro silhouette: oval earbud + long visible stem.
+         Stroked rather than filled so it reads as a premium icon and the
+         stem is visually distinct from the bud. -->
     <path
-        android:fillColor="@android:color/white"
-        android:pathData="M10,2 C7.24,2 5,4.24 5,7 C5,9.76 7.24,12 10,12 C12.76,12 15,9.76 15,7 C15,4.24 12.76,2 10,2 Z" />
-    <path
-        android:fillColor="@android:color/white"
-        android:pathData="M8,9.5 C8,9.22 8.22,9 8.5,9 L11.5,9 C11.78,9 12,9.22 12,9.5 L12,20 C12,21.1 11.1,22 10,22 C8.9,22 8,21.1 8,20 Z" />
+        android:strokeColor="@android:color/white"
+        android:strokeWidth="1.6"
+        android:fillColor="@android:color/transparent"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M10,2.8 C8.07,2.8 6.5,4.61 6.5,6.85 C6.5,9 7.95,10.78 9.85,10.99 L9.85,19.7 C9.85,20.86 10.81,21.8 12,21.8 C13.19,21.8 14.15,20.86 14.15,19.7 L14.15,10.99 C16.05,10.78 17.5,9 17.5,6.85 C17.5,4.61 15.93,2.8 14,2.8 Z" />
 </vector>

@@ -69,6 +69,10 @@
     <string name="settings_view_logs_subtitle">Read the log in-app without exporting</string>
     <string name="settings_clear_cache_subtitle">Clear the last persisted battery snapshot</string>
     <string name="action_view_logs">View logs in app</string>
+    <string name="geiger_start">Find AirPods (Geiger)</string>
+    <string name="geiger_active">Hunting… tap to stop</string>
+    <string name="geiger_subtitle">Phone will beep faster as you get closer</string>
+    <string name="geiger_rssi_fmt">Signal: %1$d dBm — stronger = closer</string>
     <string name="update_dialog_title">Updating AirPods…</string>
     <string name="update_progress_fmt">%1$.0f %% · %2$s / %3$s</string>
     <string name="update_progress_unknown">Downloading…</string>

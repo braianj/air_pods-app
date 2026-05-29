@@ -293,6 +293,8 @@ private fun DashboardContent(
             onStop = onStop
         )
 
+        GeigerCard(rssi = state.snapshot?.rssi)
+
         val audioName = state.audioConnectedName
         val snap = state.snapshot
         if (snap == null) {
@@ -902,6 +904,57 @@ private fun HintCard() {
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+@Composable
+private fun GeigerCard(rssi: Int?) {
+    val active by com.airpods.app.ble.AirPodsGeiger.active.collectAsStateWithLifecycle()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .clickable {
+                if (active) com.airpods.app.ble.AirPodsGeiger.stop()
+                else com.airpods.app.ble.AirPodsGeiger.start(scope)
+            },
+        color = if (active) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_proximity),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+                tint = if (active) MaterialTheme.colorScheme.onPrimaryContainer
+                else MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(
+                        if (active) R.string.geiger_active else R.string.geiger_start
+                    ),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (active) MaterialTheme.colorScheme.onPrimaryContainer
+                    else MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = if (active && rssi != null)
+                        stringResource(R.string.geiger_rssi_fmt, rssi)
+                    else stringResource(R.string.geiger_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (active) MaterialTheme.colorScheme.onPrimaryContainer
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 

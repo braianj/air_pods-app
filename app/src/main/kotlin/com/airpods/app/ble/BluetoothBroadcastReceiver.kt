@@ -136,10 +136,7 @@ object BluetoothBroadcastReceiver : BroadcastReceiver() {
             BluetoothDevice.ACTION_ACL_CONNECTED -> {
                 if (isAirPods(name)) {
                     AirPodsRepository.setAudioConnected(name)
-                    // Auto-start the BLE listener so a user who connects their
-                    // AirPods doesn't need to manually open the app and tap
-                    // "Buscar AirPods" first.
-                    AirPodsBleService.start(context.applicationContext)
+                    autoStartIfEnabled(context)
                 }
             }
             BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
@@ -152,7 +149,7 @@ object BluetoothBroadcastReceiver : BroadcastReceiver() {
                 if (isAirPods(name)) {
                     if (newState == 2) {
                         AirPodsRepository.setAudioConnected(name)
-                        AirPodsBleService.start(context.applicationContext)
+                        autoStartIfEnabled(context)
                     } else if (newState == 0) AirPodsRepository.setAudioConnected(null)
                 }
             }
@@ -221,6 +218,20 @@ object BluetoothBroadcastReceiver : BroadcastReceiver() {
             timestampMs = System.currentTimeMillis()
         )
         AirPodsRepository.onSnapshot(snap)
+    }
+
+    /**
+     * Auto-start the BLE listener on AirPods connect — but ONLY if the user
+     * has previously opted in (via "Buscar AirPods"). If they tapped
+     * "Detener", we respect that and don't fight them by restarting.
+     */
+    private fun autoStartIfEnabled(context: Context) {
+        val prefs = context.applicationContext.getSharedPreferences(
+            BootReceiver.PREFS, Context.MODE_PRIVATE
+        )
+        if (prefs.getBoolean(BootReceiver.KEY_AUTOSTART, false)) {
+            AirPodsBleService.start(context.applicationContext)
+        }
     }
 
     private fun publishSyntheticSnapshot(level: Int) {

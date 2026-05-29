@@ -34,6 +34,14 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        /** True while this activity is in the foreground — used by the BLE
+         *  service to skip the popup/heads-up when the user is already
+         *  looking at the dashboard. */
+        @Volatile var isForeground: Boolean = false
+            private set
+    }
+
     private val pendingUpdate = MutableStateFlow<UpdateChecker.UpdateInfo?>(null)
     private val updateDismissed = MutableStateFlow(false)
 
@@ -134,6 +142,16 @@ class MainActivity : ComponentActivity() {
                 Toast.LENGTH_LONG
             ).show()
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        isForeground = true
+    }
+
+    override fun onPause() {
+        super.onPause()
+        isForeground = false
     }
 
     private fun checkUpdate() {

@@ -314,10 +314,9 @@ class AirPodsBleService : LifecycleService() {
                 // Fire the popups ONCE per fresh-open burst. On subsequent
                 // packets we just update the underlying repository state
                 // silently — no overlay re-appearance, no heads-up re-fire.
-                if (freshOpen) {
-                    // Prefer the overlay if the user granted SYSTEM_ALERT_WINDOW
-                    // (looks better — sits over the actual app). Otherwise
-                    // fall back to a heads-up notification, never both.
+                // Also skip when the dashboard is already in the foreground:
+                // the popup adds zero value when the same data is on screen.
+                if (freshOpen && !com.airpods.app.MainActivity.isForeground) {
                     val overlayShown = overlay?.show(snapshot) == true
                     if (!overlayShown) {
                         BatteryNotificationManager.showPopup(applicationContext, snapshot)

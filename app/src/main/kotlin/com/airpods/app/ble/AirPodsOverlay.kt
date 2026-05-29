@@ -67,10 +67,11 @@ class AirPodsOverlay(private val context: Context) {
                         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                     PixelFormat.TRANSLUCENT
                 ).apply {
-                    gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                    // Sit above the system gesture / nav bar, not glued to
-                    // the bottom edge.
-                    y = dpToPx(120)
+                    // Anchor at the top: the keyboard often covers anything
+                    // near the bottom, and there's no reliable way for a
+                    // foreign app to know another app's IME is visible.
+                    gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                    y = dpToPx(64)
                     windowAnimations = android.R.style.Animation_Toast
                 }
                 runCatching { wm.addView(view, params) }
@@ -106,7 +107,7 @@ class AirPodsOverlay(private val context: Context) {
     private fun attachDismissHandlers(view: View) {
         // Tap to dismiss.
         view.setOnClickListener { userDismissed() }
-        // Swipe-down to dismiss (we sit at the bottom of the screen now).
+        // Swipe-up to dismiss (overlay sits at the top now).
         val touchSlopDp = 24f
         val slopPx = touchSlopDp * context.resources.displayMetrics.density
         var startY = 0f
@@ -117,7 +118,7 @@ class AirPodsOverlay(private val context: Context) {
                     false
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    if (ev.rawY - startY > slopPx) {
+                    if (startY - ev.rawY > slopPx) {
                         userDismissed()
                         true
                     } else false

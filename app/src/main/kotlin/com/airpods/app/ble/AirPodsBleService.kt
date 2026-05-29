@@ -617,12 +617,18 @@ class AirPodsBleService : LifecycleService() {
     private fun startWatchdog() {
         watchdogJob?.cancel()
         watchdogJob = lifecycleScope.launch {
+            var alreadyLost = false
             while (true) {
                 delay(STALE_AFTER_MS)
                 val age = System.currentTimeMillis() - lastSnapshotAt
-                if (lastSnapshotAt != 0L && age > STALE_AFTER_MS) {
+                val isStale = lastSnapshotAt != 0L && age > STALE_AFTER_MS
+                if (isStale && !alreadyLost) {
                     AppLogger.i(TAG, "watchdog: no snapshot for ${age}ms — marking lost")
                     AirPodsRepository.onLost()
+                    alreadyLost = true
+                } else if (!isStale && alreadyLost) {
+                    // Fresh snapshot came in since last tick — re-arm.
+                    alreadyLost = false
                 }
             }
         }

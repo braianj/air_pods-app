@@ -34,7 +34,6 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -251,7 +250,6 @@ private fun formatBytes(b: Long): String {
     return "%.1f MB".format(mb)
 }
 
-@Composable
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DashboardContent(

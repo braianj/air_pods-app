@@ -57,6 +57,12 @@ class AirPodsBleService : LifecycleService() {
     // Diagnostic counters refreshed by the stats job
     private val subtypeCounts = java.util.HashMap<Int, Int>()
     private var statsJob: Job? = null
+    private var batteryJob: Job? = null
+
+    // Battery-impact diagnostics. Captured when the service starts so the
+    // periodic log can show the delta over the session.
+    private var serviceStartedAtMs: Long = 0L
+    private var batteryAtServiceStart: Int = -1
 
     override fun onCreate() {
         super.onCreate()
@@ -102,6 +108,7 @@ class AirPodsBleService : LifecycleService() {
         observeStateForNotification()
         startWatchdog()
         startStatsLogger()
+        startBatteryLogger()
         startAudioMonitor()
         BluetoothBroadcastReceiver.register(this)
         return START_STICKY
@@ -150,6 +157,45 @@ class AirPodsBleService : LifecycleService() {
                 AppLogger.i(TAG, "stats(10s): apple_subtypes=[$snapshot] snapshots=$snapshotsSeen")
             }
         }
+    }
+
+    private fun startBatteryLogger() {
+        batteryJob?.cancel()
+        if (serviceStartedAtMs == 0L) {
+            serviceStartedAtMs = System.currentTimeMillis()
+            batteryAtServiceStart = readDeviceBatteryPct()
+            AppLogger.i(
+                TAG,
+                "battery@start=$batteryAtServiceStart% scan=batch(reportDelay=1) mode=LOW_LATENCY"
+            )
+        }
+        batteryJob = lifecycleScope.launch {
+            while (true) {
+                delay(60_000)
+                val nowBat = readDeviceBatteryPct()
+                val drop = if (batteryAtServiceStart in 0..100 && nowBat in 0..100)
+                    batteryAtServiceStart - nowBat
+                else null
+                val uptimeMin = (System.currentTimeMillis() - serviceStartedAtMs) / 60_000
+                val pm = getSystemService(POWER_SERVICE) as? android.os.PowerManager
+                val doze = pm?.isDeviceIdleMode ?: false
+                val powerSave = pm?.isPowerSaveMode ?: false
+                AppLogger.i(
+                    TAG,
+                    "battery(1min): uptime=${uptimeMin}min " +
+                        "phoneBat=$nowBat% drop=${drop ?: "?"}% " +
+                        "doze=$doze powerSave=$powerSave " +
+                        "snapshotsThisSession=$snapshotsSeen " +
+                        "scanRunning=${scanCallback != null}"
+                )
+            }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun readDeviceBatteryPct(): Int {
+        val mgr = getSystemService(BATTERY_SERVICE) as? android.os.BatteryManager
+        return mgr?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
     }
 
     private fun startForegroundCompat(notif: android.app.Notification) {
@@ -265,14 +311,11 @@ class AirPodsBleService : LifecycleService() {
                 lastSnapshotAt = now
                 retryBackoffMs = INITIAL_BACKOFF_MS
                 snapshotsSeen++
-                // Pop the iOS-style overlay over whatever the user is doing.
-                // The overlay reuses its existing view if already shown, so
-                // consecutive packets just refresh the values silently.
-                overlay?.show(snapshot)
-                // Fallback for users who haven't (or can't) grant the
-                // overlay permission: a high-priority heads-up notification
-                // that appears at the top of the screen on a fresh open.
+                // Fire the popups ONCE per fresh-open burst. On subsequent
+                // packets we just update the underlying repository state
+                // silently — no overlay re-appearance, no heads-up re-fire.
                 if (freshOpen) {
+                    overlay?.show(snapshot)
                     BatteryNotificationManager.showPopup(applicationContext, snapshot)
                 }
                 // Log the parsed result together with the raw bytes, but only
@@ -367,6 +410,19 @@ class AirPodsBleService : LifecycleService() {
         watchdogJob?.cancel()
         notificationJob?.cancel()
         statsJob?.cancel()
+        batteryJob?.cancel()
+        if (serviceStartedAtMs > 0L) {
+            val uptimeMin = (System.currentTimeMillis() - serviceStartedAtMs) / 60_000
+            val nowBat = readDeviceBatteryPct()
+            val drop = if (batteryAtServiceStart in 0..100 && nowBat in 0..100)
+                batteryAtServiceStart - nowBat
+            else null
+            AppLogger.i(
+                TAG,
+                "battery@stop: uptime=${uptimeMin}min phoneBat=$nowBat% drop=${drop ?: "?"}% snapshots=$snapshotsSeen"
+            )
+            serviceStartedAtMs = 0L
+        }
         audioMonitor?.stop()
         audioMonitor = null
         aapClient?.stop()

@@ -42,9 +42,25 @@ object AirPodsRepository {
     fun onSnapshot(snapshot: AirPodsSnapshot) {
         val reading = proximity.update(snapshot.rssi)
         _state.update {
+            val prev = it.snapshot
+            // Merge per-field: a fresh packet that omits one of L / R / case
+            // (the nibble was 0xF = "unknown / not reported this beacon")
+            // shouldn't blank out a value we already had a few seconds ago.
+            // The same model came in, so the previous reading is still a
+            // good approximation of "current".
+            val merged = if (prev != null && prev.model == snapshot.model) {
+                snapshot.copy(
+                    leftPct = snapshot.leftPct ?: prev.leftPct,
+                    rightPct = snapshot.rightPct ?: prev.rightPct,
+                    casePct = snapshot.casePct ?: prev.casePct,
+                    leftCharging = if (snapshot.leftPct != null) snapshot.leftCharging else prev.leftCharging,
+                    rightCharging = if (snapshot.rightPct != null) snapshot.rightCharging else prev.rightCharging,
+                    caseCharging = if (snapshot.casePct != null) snapshot.caseCharging else prev.caseCharging
+                )
+            } else snapshot
             it.copy(
-                status = ConnectionStatus.Connected(snapshot.timestampMs),
-                snapshot = snapshot,
+                status = ConnectionStatus.Connected(merged.timestampMs),
+                snapshot = merged,
                 proximity = reading
             )
         }

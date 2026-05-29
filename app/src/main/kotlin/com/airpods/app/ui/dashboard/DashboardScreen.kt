@@ -23,12 +23,16 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -36,6 +40,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -49,6 +58,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
+import com.airpods.app.BuildConfig
 import com.airpods.app.R
 import com.airpods.app.ble.AirPodsState
 import com.airpods.app.ble.ConnectionStatus
@@ -58,7 +69,14 @@ import com.airpods.app.ui.theme.BatteryBad
 import com.airpods.app.ui.theme.BatteryGood
 import com.airpods.app.ui.theme.BatteryWarn
 import com.airpods.app.ui.theme.ThemePreference
+import com.airpods.app.update.UpdateChecker
 import com.airpods.app.update.Updater
+
+private enum class Tab(val titleRes: Int, val iconRes: Int) {
+    DASHBOARD(R.string.tab_dashboard, R.drawable.ic_airpods),
+    INFO(R.string.tab_info, R.drawable.ic_update),
+    SETTINGS(R.string.tab_settings, R.drawable.ic_brightness_auto)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,27 +93,22 @@ fun DashboardScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val running = viewModel.isRunningRequested()
     val updateState by Updater.state.collectAsStateWithLifecycle()
+    var selectedTab by remember { mutableStateOf(Tab.DASHBOARD) }
+    var showLogViewer by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = stringResource(R.string.app_name),
+                        text = stringResource(
+                            when (selectedTab) {
+                                Tab.DASHBOARD -> R.string.app_name
+                                Tab.INFO -> R.string.tab_info
+                                Tab.SETTINGS -> R.string.tab_settings
+                            }
+                        ),
                         style = MaterialTheme.typography.titleLarge
-                    )
-                },
-                actions = {
-                    IconButton(onClick = onShareLogs) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_share),
-                            contentDescription = stringResource(R.string.action_share_logs),
-                            tint = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
-                    ThemeToggleButton(
-                        current = themePreference,
-                        onClick = onCycleTheme
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -103,24 +116,54 @@ fun DashboardScreen(
                 )
             )
         },
+        bottomBar = {
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer
+            ) {
+                Tab.entries.forEach { tab ->
+                    NavigationBarItem(
+                        selected = selectedTab == tab,
+                        onClick = { selectedTab = tab },
+                        icon = {
+                            Icon(
+                                painter = painterResource(tab.iconRes),
+                                contentDescription = stringResource(tab.titleRes),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        },
+                        label = { Text(stringResource(tab.titleRes)) }
+                    )
+                }
+            }
+        },
         containerColor = MaterialTheme.colorScheme.background
     ) { inner ->
-        DashboardContent(
-            padding = inner,
-            state = state,
-            running = running,
-            hasPermissions = hasPermissions,
-            onStart = {
-                if (hasPermissions) viewModel.start() else onRequestPermissions()
-            },
-            onStop = viewModel::stop,
-            onShareLogs = onShareLogs,
-            onCheckUpdate = onCheckUpdate,
-            onClearCache = viewModel::clearCachedSnapshot,
-            onRequestOverlay = onRequestOverlay
-        )
+        when (selectedTab) {
+            Tab.DASHBOARD -> DashboardContent(
+                padding = inner,
+                state = state,
+                running = running,
+                hasPermissions = hasPermissions,
+                onStart = {
+                    if (hasPermissions) viewModel.start() else onRequestPermissions()
+                },
+                onStop = viewModel::stop,
+                onClearCache = viewModel::clearCachedSnapshot
+            )
+            Tab.INFO -> InfoTab(padding = inner, onCheckUpdate = onCheckUpdate)
+            Tab.SETTINGS -> SettingsTab(
+                padding = inner,
+                themePreference = themePreference,
+                onCycleTheme = onCycleTheme,
+                onShareLogs = onShareLogs,
+                onViewLogs = { showLogViewer = true },
+                onRequestOverlay = onRequestOverlay,
+                onClearCache = viewModel::clearCachedSnapshot
+            )
+        }
 
         UpdateOverlay(state = updateState, onDismiss = { Updater.reset() })
+        if (showLogViewer) LogViewerDialog(onDismiss = { showLogViewer = false })
     }
 }
 
@@ -211,10 +254,7 @@ private fun DashboardContent(
     hasPermissions: Boolean,
     onStart: () -> Unit,
     onStop: () -> Unit,
-    onShareLogs: () -> Unit,
-    onCheckUpdate: () -> Unit,
-    onClearCache: () -> Unit,
-    onRequestOverlay: () -> Unit
+    onClearCache: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -251,14 +291,6 @@ private fun DashboardContent(
             hasPermissions = hasPermissions,
             onStart = onStart,
             onStop = onStop
-        )
-
-        // Secondary actions consolidated into a single compact tab-row so
-        // they stop eating vertical space.
-        ActionTabBar(
-            onShareLogs = onShareLogs,
-            onCheckUpdate = onCheckUpdate,
-            onRequestOverlay = onRequestOverlay
         )
 
         val audioName = state.audioConnectedName
@@ -581,63 +613,258 @@ private fun ControlButtons(
 }
 
 @Composable
-private fun ActionTabBar(
+private fun InfoTab(padding: PaddingValues, onCheckUpdate: () -> Unit) {
+    val context = LocalContext.current
+    val commits = remember { mutableStateListOf<UpdateChecker.Commit>() }
+    var updateInfo by remember { mutableStateOf<UpdateChecker.UpdateInfo?>(null) }
+    var loading by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        loading = true
+        updateInfo = UpdateChecker.check()
+        commits.clear()
+        commits.addAll(UpdateChecker.recentCommits())
+        loading = false
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(padding)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = stringResource(R.string.info_installed_version),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = BuildConfig.GIT_SHA.take(7),
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                val info = updateInfo
+                if (info != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(
+                            R.string.info_update_available, info.latestShort
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = onCheckUpdate,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_update),
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.action_check_update))
+                    }
+                } else if (!loading) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = stringResource(R.string.info_up_to_date),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        Text(
+            text = stringResource(R.string.info_recent_changes),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                if (loading) {
+                    Text(
+                        text = stringResource(R.string.info_loading),
+                        modifier = Modifier.padding(16.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else if (commits.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.info_no_commits),
+                        modifier = Modifier.padding(16.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    commits.forEachIndexed { idx, commit ->
+                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                            Text(
+                                text = commit.firstLine,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = commit.shortSha,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (idx < commits.lastIndex) {
+                            Divider(color = MaterialTheme.colorScheme.outlineVariant)
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun SettingsTab(
+    padding: PaddingValues,
+    themePreference: ThemePreference,
+    onCycleTheme: () -> Unit,
     onShareLogs: () -> Unit,
-    onCheckUpdate: () -> Unit,
-    onRequestOverlay: () -> Unit
+    onViewLogs: () -> Unit,
+    onRequestOverlay: () -> Unit,
+    onClearCache: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(padding)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        SettingRow(
+            iconRes = when (themePreference) {
+                ThemePreference.SYSTEM -> R.drawable.ic_brightness_auto
+                ThemePreference.LIGHT -> R.drawable.ic_brightness_light
+                ThemePreference.DARK -> R.drawable.ic_brightness_dark
+            },
+            title = stringResource(R.string.theme_action),
+            subtitle = stringResource(
+                when (themePreference) {
+                    ThemePreference.SYSTEM -> R.string.theme_label_system
+                    ThemePreference.LIGHT -> R.string.theme_label_light
+                    ThemePreference.DARK -> R.string.theme_label_dark
+                }
+            ),
+            onClick = onCycleTheme
+        )
+        SettingRow(
+            iconRes = R.drawable.ic_airpods,
+            title = stringResource(R.string.action_grant_overlay),
+            subtitle = stringResource(R.string.settings_overlay_subtitle),
+            onClick = onRequestOverlay
+        )
+        SettingRow(
+            iconRes = R.drawable.ic_share,
+            title = stringResource(R.string.action_export_logs),
+            subtitle = stringResource(R.string.settings_save_logs_subtitle),
+            onClick = onShareLogs
+        )
+        SettingRow(
+            iconRes = R.drawable.ic_proximity,
+            title = stringResource(R.string.action_view_logs),
+            subtitle = stringResource(R.string.settings_view_logs_subtitle),
+            onClick = onViewLogs
+        )
+        SettingRow(
+            iconRes = R.drawable.ic_bolt,
+            title = stringResource(R.string.action_clear_cache),
+            subtitle = stringResource(R.string.settings_clear_cache_subtitle),
+            onClick = onClearCache
+        )
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun SettingRow(
+    iconRes: Int,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        onClick = onClick
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            ActionTab(
-                iconRes = R.drawable.ic_airpods,
-                label = stringResource(R.string.tab_popup),
-                onClick = onRequestOverlay
+            Icon(
+                painter = painterResource(iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+                tint = MaterialTheme.colorScheme.onSurface
             )
-            ActionTab(
-                iconRes = R.drawable.ic_share,
-                label = stringResource(R.string.tab_logs),
-                onClick = onShareLogs
-            )
-            ActionTab(
-                iconRes = R.drawable.ic_update,
-                label = stringResource(R.string.tab_update),
-                onClick = onCheckUpdate
-            )
+            Spacer(Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun ActionTab(iconRes: Int, label: String, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            painter = painterResource(iconRes),
-            contentDescription = label,
-            modifier = Modifier.size(24.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+private fun LogViewerDialog(onDismiss: () -> Unit) {
+    var content by remember { mutableStateOf("Cargando…") }
+    LaunchedEffect(Unit) {
+        content = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.airpods.app.util.AppLogger.readTail()
+        }
     }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.action_view_logs)) },
+        text = {
+            Column(modifier = Modifier.height(420.dp)) {
+                Text(
+                    text = content,
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Normal),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("OK") }
+        }
+    )
 }
 
 @Composable

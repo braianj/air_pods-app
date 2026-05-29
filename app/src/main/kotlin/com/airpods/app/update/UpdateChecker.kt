@@ -11,7 +11,46 @@ object UpdateChecker {
 
     private const val API_URL =
         "https://api.github.com/repos/braianj/air_pods-app/releases/tags/latest"
+    private const val COMMITS_URL =
+        "https://api.github.com/repos/braianj/air_pods-app/commits?per_page=15"
     private const val TAG = "UpdCheck"
+
+    data class Commit(val sha: String, val message: String) {
+        val shortSha: String get() = sha.take(7)
+        val firstLine: String get() = message.substringBefore('\n')
+    }
+
+    /** Fetches the most recent commits on main for the in-app "Info" tab. */
+    suspend fun recentCommits(): List<Commit> = withContext(Dispatchers.IO) {
+        var conn: HttpURLConnection? = null
+        try {
+            conn = (URL(COMMITS_URL).openConnection() as HttpURLConnection).apply {
+                instanceFollowRedirects = true
+                connectTimeout = 10_000
+                readTimeout = 10_000
+                setRequestProperty("Accept", "application/vnd.github.v3+json")
+            }
+            if (conn.responseCode != 200) return@withContext emptyList()
+            val body = conn.inputStream.bufferedReader().readText()
+            // Quick & dirty JSON-ish parse — avoids pulling in a JSON dep.
+            val shaRegex = Regex("\"sha\"\\s*:\\s*\"([a-f0-9]{40})\"")
+            val msgRegex = Regex("\"message\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"")
+            val shas = shaRegex.findAll(body).map { it.groupValues[1] }.toList()
+            val msgs = msgRegex.findAll(body).map {
+                it.groupValues[1]
+                    .replace("\\n", "\n")
+                    .replace("\\\"", "\"")
+                    .replace("\\/", "/")
+                    .replace("\\\\", "\\")
+            }.toList()
+            shas.zip(msgs).map { (s, m) -> Commit(s, m) }
+        } catch (t: Throwable) {
+            AppLogger.w(TAG, "recentCommits failed", t)
+            emptyList()
+        } finally {
+            runCatching { conn?.disconnect() }
+        }
+    }
 
     data class UpdateInfo(
         val installedSha: String,

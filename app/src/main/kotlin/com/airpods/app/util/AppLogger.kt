@@ -102,6 +102,22 @@ object AppLogger {
         }
     }
 
+    /**
+     * Returns the tail of the log file as a string for in-app display.
+     * Caps at maxBytes to avoid blowing up the UI.
+     */
+    fun readTail(maxBytes: Int = 200_000): String {
+        flushBlocking()
+        val current = logFile ?: return "(logger not initialised)"
+        if (!current.exists()) return "(no log file yet)"
+        val size = current.length()
+        val start = (size - maxBytes).coerceAtLeast(0L)
+        return current.inputStream().use { stream ->
+            stream.skip(start)
+            stream.bufferedReader().readText()
+        }
+    }
+
     fun snapshotForShare(context: Context): File {
         i("Logger", "snapshotForShare requested by user")
         flushBlocking()

@@ -16,5 +16,13 @@ class BootReceiver : BroadcastReceiver() {
     companion object {
         const val PREFS = "airpods_prefs"
         const val KEY_AUTOSTART = "autostart_on_boot"
+
+        /**
+         * Timestamp (epoch ms) until which auto-start is suppressed. Set by
+         * the viewmodel's stop() so the BluetoothBroadcastReceiver doesn't
+         * relaunch the service immediately after the user taps Detener.
+         */
+        const val KEY_PAUSE_UNTIL = "autostart_paused_until"
+        const val PAUSE_AFTER_STOP_MS = 30_000L
     }
 }

@@ -229,17 +229,27 @@ object BluetoothBroadcastReceiver : BroadcastReceiver() {
     }
 
     /**
-     * Auto-start the BLE listener on AirPods connect — but ONLY if the user
-     * has previously opted in (via "Buscar AirPods"). If they tapped
-     * "Detener", we respect that and don't fight them by restarting.
+     * Auto-start the BLE listener when the AirPods connect. Two gates:
+     *
+     *  1. The user must have opted in (KEY_AUTOSTART = true). That happens
+     *     the first time they tap "Buscar AirPods" and stays true forever.
+     *  2. The user is not currently within their pause window. Tapping
+     *     "Detener" sets KEY_PAUSE_UNTIL to now + 30s so a still-connected
+     *     AirPods broadcasting profile-state events doesn't immediately
+     *     re-launch the service while the user wanted it stopped. After
+     *     that 30s window the next ACL_CONNECTED event auto-resumes.
      */
     private fun autoStartIfEnabled(context: Context) {
         val prefs = context.applicationContext.getSharedPreferences(
             BootReceiver.PREFS, Context.MODE_PRIVATE
         )
-        if (prefs.getBoolean(BootReceiver.KEY_AUTOSTART, false)) {
-            AirPodsBleService.start(context.applicationContext)
+        if (!prefs.getBoolean(BootReceiver.KEY_AUTOSTART, false)) return
+        val pauseUntil = prefs.getLong(BootReceiver.KEY_PAUSE_UNTIL, 0L)
+        if (System.currentTimeMillis() < pauseUntil) {
+            AppLogger.d(TAG, "auto-start gated: user paused until $pauseUntil")
+            return
         }
+        AirPodsBleService.start(context.applicationContext)
     }
 
     private fun publishSyntheticSnapshot(level: Int) {

@@ -835,7 +835,6 @@ private fun SettingsTab(
 }
 
 @Composable
-@Composable
 private fun PowerSaveToggleRow() {
     val ctx = LocalContext.current
     val prefs = remember {

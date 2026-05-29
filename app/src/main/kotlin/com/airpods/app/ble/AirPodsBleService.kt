@@ -182,6 +182,7 @@ class AirPodsBleService : LifecycleService() {
     private fun startStatsLogger() {
         statsJob?.cancel()
         statsJob = lifecycleScope.launch {
+            var lastLogged = ""
             while (true) {
                 delay(30_000)
                 val snapshot = synchronized(subtypeCounts) {
@@ -190,12 +191,16 @@ class AirPodsBleService : LifecycleService() {
                         .sortedByDescending { it.value }
                         .joinToString(", ") { (k, v) -> "0x%02X=%d".format(k, v) }
                 }
-                AppLogger.i(
-                    TAG,
-                    "stats(30s): apple_subtypes=[$snapshot] snapshots=$snapshotsSeen " +
-                        "deduped=$dedupedCount rssiRejects=$rssiRejectsCount " +
-                        "foreignRejects=$foreignModelRejectsCount"
-                )
+                val line = "stats(30s): apple_subtypes=[$snapshot] snapshots=$snapshotsSeen " +
+                    "deduped=$dedupedCount rssiRejects=$rssiRejectsCount " +
+                    "foreignRejects=$foreignModelRejectsCount"
+                // Only write the stats line when something actually moved
+                // since the last tick. In OPPORTUNISTIC mode with the screen
+                // off, ticks would otherwise echo the same numbers forever.
+                if (line != lastLogged) {
+                    lastLogged = line
+                    AppLogger.i(TAG, line)
+                }
             }
         }
     }

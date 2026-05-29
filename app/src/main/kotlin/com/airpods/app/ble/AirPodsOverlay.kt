@@ -46,8 +46,9 @@ class AirPodsOverlay(private val context: Context) {
             bind(view, snapshot)
 
             if (existing == null) {
+                val widthPx = (context.resources.displayMetrics.widthPixels * 0.86f).toInt()
                 val params = WindowManager.LayoutParams(
-                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    widthPx,
                     WindowManager.LayoutParams.WRAP_CONTENT,
                     overlayType(),
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -56,7 +57,7 @@ class AirPodsOverlay(private val context: Context) {
                     PixelFormat.TRANSLUCENT
                 ).apply {
                     gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                    y = dpToPx(80)
+                    y = dpToPx(72)
                     windowAnimations = android.R.style.Animation_Toast
                 }
                 runCatching { wm.addView(view, params) }

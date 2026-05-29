@@ -3,9 +3,10 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24"
-    android:tint="?android:attr/colorControlNormal">
-    <!-- AirPods Pro case body: wide rounded rectangle, almost square. -->
+    android:tint="?android:attr/textColorPrimary">
+    <!-- AirPods Pro case body: wide rounded rectangle, almost square,
+         matches the Pro case proportions. -->
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M4,8 C4,6.34 5.34,5 7,5 L17,5 C18.66,5 20,6.34 20,8 L20,17 C20,18.66 18.66,20 17,20 L7,20 C5.34,20 4,18.66 4,17 Z" />
+        android:pathData="M5,7 C5,5.34 6.34,4 8,4 L16,4 C17.66,4 19,5.34 19,7 L19,18 C19,19.66 17.66,21 16,21 L8,21 C6.34,21 5,19.66 5,18 Z" />
 </vector>

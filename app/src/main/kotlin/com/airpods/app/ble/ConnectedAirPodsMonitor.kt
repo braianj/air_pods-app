@@ -15,15 +15,12 @@ import androidx.core.content.ContextCompat
 import com.airpods.app.util.AppLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class ConnectedAirPodsMonitor(private val context: Context) {
 
     companion object {
         private const val TAG = "AudioMon"
-        private const val POLL_MS = 20_000L
 
         private const val METADATA_UNTETHERED_LEFT_BATTERY = 10
         private const val METADATA_UNTETHERED_RIGHT_BATTERY = 11
@@ -72,14 +69,11 @@ class ConnectedAirPodsMonitor(private val context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             adapter.getProfileProxy(context, profileListener, PROFILE_LE_AUDIO)
         }
-
-        pollJob?.cancel()
-        pollJob = scope.launch {
-            while (isActive) {
-                delay(POLL_MS)
-                refresh()
-            }
-        }
+        // One initial sync, then rely on BluetoothBroadcastReceiver events.
+        // The previous every-20s poll re-listed bondedDevices and re-tried
+        // getMetadata (which is permanently BLUETOOTH_PRIVILEGED-gated) —
+        // pure waste of CPU + battery.
+        refresh()
     }
 
     fun stop() {

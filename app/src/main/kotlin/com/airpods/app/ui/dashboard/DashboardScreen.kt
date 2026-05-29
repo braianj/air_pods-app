@@ -33,6 +33,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -44,7 +46,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshots.SnapshotStateList
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -247,6 +252,8 @@ private fun formatBytes(b: Long): String {
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 private fun DashboardContent(
     padding: PaddingValues,
     state: AirPodsState,
@@ -256,10 +263,28 @@ private fun DashboardContent(
     onStop: () -> Unit,
     onClearCache: () -> Unit
 ) {
-    Column(
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var refreshing by remember { mutableStateOf(false) }
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = {
+            refreshing = true
+            // Trigger a scan re-arm — picks up bond/screen state changes and
+            // gives the BT controller a fresh look at the radio.
+            com.airpods.app.ble.AirPodsBleService.refresh(ctx.applicationContext)
+            scope.launch {
+                delay(1_500)
+                refreshing = false
+            }
+        },
         modifier = Modifier
             .fillMaxSize()
             .padding(padding)
+    ) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -309,6 +334,7 @@ private fun DashboardContent(
         // Bottom breathing room so the last card isn't flush with the nav bar.
         Spacer(Modifier.height(24.dp))
     }
+    } // close PullToRefreshBox
 }
 
 @Composable
@@ -613,14 +639,16 @@ private fun ControlButtons(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun InfoTab(padding: PaddingValues, onCheckUpdate: () -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val commits = remember { mutableStateListOf<UpdateChecker.Commit>() }
     var updateInfo by remember { mutableStateOf<UpdateChecker.UpdateInfo?>(null) }
     var loading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(Unit) {
+    suspend fun refreshAll() {
         loading = true
         updateInfo = UpdateChecker.check()
         commits.clear()
@@ -628,10 +656,18 @@ private fun InfoTab(padding: PaddingValues, onCheckUpdate: () -> Unit) {
         loading = false
     }
 
-    Column(
+    LaunchedEffect(Unit) { refreshAll() }
+
+    PullToRefreshBox(
+        isRefreshing = loading,
+        onRefresh = { scope.launch { refreshAll() } },
         modifier = Modifier
             .fillMaxSize()
             .padding(padding)
+    ) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -734,6 +770,7 @@ private fun InfoTab(padding: PaddingValues, onCheckUpdate: () -> Unit) {
         }
         Spacer(Modifier.height(24.dp))
     }
+    } // close PullToRefreshBox
 }
 
 @Composable

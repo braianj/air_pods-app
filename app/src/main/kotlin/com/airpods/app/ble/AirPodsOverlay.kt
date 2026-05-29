@@ -67,8 +67,10 @@ class AirPodsOverlay(private val context: Context) {
                         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                     PixelFormat.TRANSLUCENT
                 ).apply {
-                    gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                    y = dpToPx(72)
+                    gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                    // Sit above the system gesture / nav bar, not glued to
+                    // the bottom edge.
+                    y = dpToPx(120)
                     windowAnimations = android.R.style.Animation_Toast
                 }
                 runCatching { wm.addView(view, params) }
@@ -104,18 +106,18 @@ class AirPodsOverlay(private val context: Context) {
     private fun attachDismissHandlers(view: View) {
         // Tap to dismiss.
         view.setOnClickListener { userDismissed() }
-        // Swipe-up to dismiss: simple Y-delta check on touch.
+        // Swipe-down to dismiss (we sit at the bottom of the screen now).
         val touchSlopDp = 24f
         val slopPx = touchSlopDp * context.resources.displayMetrics.density
         var startY = 0f
-        view.setOnTouchListener { v, ev ->
+        view.setOnTouchListener { _, ev ->
             when (ev.action) {
                 MotionEvent.ACTION_DOWN -> {
                     startY = ev.rawY
                     false
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    if (startY - ev.rawY > slopPx) {
+                    if (ev.rawY - startY > slopPx) {
                         userDismissed()
                         true
                     } else false
